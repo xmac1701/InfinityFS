@@ -45,6 +45,8 @@
 			</DCCReference>
 			<DCCReference Include="..\src\IFS\IFS.GSS.pas"/>
 			<DCCReference Include="..\src\IFS\IFS.Base.pas"/>
+			<DCCReference Include="..\src\Explorer\uIFSEGlobal.pas"/>
+			<DCCReference Include="..\src\IFS\IFS.StreamCodec.pas"/>
 			<BuildConfiguration Include="Base">
 				<Key>Base</Key>
 			</BuildConfiguration>

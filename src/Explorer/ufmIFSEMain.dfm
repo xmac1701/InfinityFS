@@ -76,8 +76,6 @@ object fmIFSEMain: TfmIFSEMain
     SmallImages = imgFolderView
     TabOrder = 1
     ViewStyle = vsReport
-    ExplicitLeft = 204
-    ExplicitWidth = 431
   end
   object tvFolder: TCITreeView
     Left = 0
@@ -101,8 +99,6 @@ object fmIFSEMain: TfmIFSEMain
     OnChange = tvFolderChange
     OnDeletion = tvFolderDeletion
     OnExpanding = tvFolderExpanding
-    ExplicitTop = -63
-    ExplicitHeight = 400
   end
   object dlgOpen: TOpenDialog
     Left = 296
@@ -113,7 +109,7 @@ object fmIFSEMain: TfmIFSEMain
     Left = 80
     Top = 96
     Bitmap = {
-      494C010102006C00800010001000FFFFFFFF2110FFFFFFFFFFFFFFFF424D3600
+      494C010102006C00880010001000FFFFFFFF2110FFFFFFFFFFFFFFFF424D3600
       0000000000003600000028000000400000001000000001002000000000000010
       0000000000000000000000000000000000000000000000000000000000000000
       000000000000999897FF999897FF999897FF1A1A1A7002020220000000000000
@@ -256,8 +252,20 @@ object fmIFSEMain: TfmIFSEMain
     Left = 376
     Top = 176
     object AddFile1: TMenuItem
-      Caption = 'Add File'
+      Caption = 'Import File'
       OnClick = AddFile1Click
     end
+    object ExportFile1: TMenuItem
+      Caption = 'Export File'
+      OnClick = ExportFile1Click
+    end
+    object GetAttrs1: TMenuItem
+      Caption = 'Get Attrs'
+      OnClick = GetAttrs1Click
+    end
+  end
+  object dlgSave: TSaveDialog
+    Left = 296
+    Top = 224
   end
 end

@@ -8,7 +8,7 @@ uses
   GpStructuredStorage;
 
 type
-  TIFS_GSS = class(TInfinityFS)
+  TifsGSS = class(TInfinityFS)
   private
     FStorage: IGpStructuredStorage;
   public
@@ -18,41 +18,41 @@ type
     procedure ExportFile(const DataFile, LocalFile: string); override;
     procedure FileTraversal(const Folder: string; Callback: TTraversalProc); override;
     procedure FolderTraversal(const Folder: string; Callback: TTraversalProc); override;
+    function GetFileAttr(const FileName: string): TifsFileAttr; override;
+    function GetFileAttrEx(const FileName: string): TifsFileAttrEx; override;
     procedure ImportFile(const LocalFile, DataFile: string); override;
     function IsIFS(const StorageFile: string): Boolean; overload; override;
     function IsIFS(Stream: TStream): Boolean; overload; override;
     function OpenFile(const FileName: string; Mode: Word = fmOpenReadWrite): TStream; override;
     procedure OpenStorage(const StorageFile: string; Mode: Word = fmOpenReadWrite); overload; override;
     procedure OpenStorage(Stream: TStream); overload; override;
+    property Intf: IGpStructuredStorage read FStorage;
   end;
 
 implementation
 
-constructor TIFS_GSS.Create;
+constructor TifsGSS.Create;
 begin
   FStorage := GpStructuredStorage.CreateStructuredStorage;
 end;
 
-procedure TIFS_GSS.CloseStorage;
+procedure TifsGSS.CloseStorage;
 begin
   FStorage := nil;
   FStorage := GpStructuredStorage.CreateStructuredStorage;
 end;
 
-procedure TIFS_GSS.CreateFolder(const NewFolderName: string);
+procedure TifsGSS.CreateFolder(const NewFolderName: string);
 begin
-  if NewFolderName[1] = '/' then
-    FStorage.CreateFolder(NewFolderName)
-  else
-    FStorage.CreateFolder(CurFolder + NewFolderName);
+  FStorage.CreateFolder(GetFullName(NewFolderName));
 end;
 
-procedure TIFS_GSS.ExportFile(const DataFile, LocalFile: string);
+procedure TifsGSS.ExportFile(const DataFile, LocalFile: string);
 var
   stmRead: TStream;
   stmWrite: TFileStream;
 begin
-  stmRead := FStorage.OpenFile(DataFile, fmOpenRead);
+  stmRead := FStorage.OpenFile(GetFullName(DataFile), fmOpenRead);
   stmWrite := TFileStream.Create(LocalFile, fmCreate);
   try
     stmWrite.CopyFrom(stmRead, stmRead.Size); //todo:  here can be extended
@@ -62,7 +62,7 @@ begin
   end;
 end;
 
-procedure TIFS_GSS.FileTraversal(const Folder: string; Callback: TTraversalProc);
+procedure TifsGSS.FileTraversal(const Folder: string; Callback: TTraversalProc);
 var
   AList: TStringList;
   s: string;
@@ -71,13 +71,13 @@ begin
   try
     FStorage.FileNames(Folder, AList);
     for s in AList do
-      Callback(s);
+      Callback(s, GetFileAttr(s));
   finally
     AList.Free;
   end;  // try
 end;
 
-procedure TIFS_GSS.FolderTraversal(const Folder: string; Callback: TTraversalProc);
+procedure TifsGSS.FolderTraversal(const Folder: string; Callback: TTraversalProc);
 var
   AList: TStringList;
   s: string;
@@ -86,19 +86,31 @@ begin
   try
     FStorage.FolderNames(Folder, AList);
     for s in AList do
-      Callback(s);
+      Callback(s, GetFileAttr(s));
   finally
     AList.Free;
   end;  // try
 end;
 
-procedure TIFS_GSS.ImportFile(const LocalFile, DataFile: string);
+function TifsGSS.GetFileAttr(const FileName: string): TifsFileAttr;
+var
+  fi: IGpStructuredFileInfo;
+begin
+  fi := FStorage.FileInfo[GetFullName(FileName)];
+end;
+
+function TifsGSS.GetFileAttrEx(const FileName: string): TifsFileAttrEx;
+begin
+  // TODO -cMM: TifsGSS.GetFileAttrEx default body inserted
+end;
+
+procedure TifsGSS.ImportFile(const LocalFile, DataFile: string);
 var
   stmWrite: TStream;
   stmRead: TFileStream;
 begin
   stmRead := TFileStream.Create(LocalFile, fmOpenRead);
-  stmWrite := FStorage.OpenFile(DataFile, fmCreate);
+  stmWrite := FStorage.OpenFile(GetFullName(DataFile), fmCreate);
   try
     stmWrite.CopyFrom(stmRead, stmRead.Size);//todo: 这里可以扩展
   finally
@@ -107,28 +119,28 @@ begin
   end;
 end;
 
-function TIFS_GSS.IsIFS(const StorageFile: string): Boolean;
+function TifsGSS.IsIFS(const StorageFile: string): Boolean;
 begin
   Result := FStorage.IsStructuredStorage(StorageFile);
 end;
 
-function TIFS_GSS.IsIFS(Stream: TStream): Boolean;
+function TifsGSS.IsIFS(Stream: TStream): Boolean;
 begin
   Result := FStorage.IsStructuredStorage(Stream);
 end;
 
-function TIFS_GSS.OpenFile(const FileName: string; Mode: Word = fmOpenReadWrite): TStream;
+function TifsGSS.OpenFile(const FileName: string; Mode: Word = fmOpenReadWrite): TStream;
 begin
-  Result := FStorage.OpenFile(FileName, Mode);
+  Result := FStorage.OpenFile(GetFullName(FileName), Mode);
 end;
 
-procedure TIFS_GSS.OpenStorage(const StorageFile: string; Mode: Word = fmOpenReadWrite);
+procedure TifsGSS.OpenStorage(const StorageFile: string; Mode: Word = fmOpenReadWrite);
 begin
   FStorage.Initialize(StorageFile, Mode);
   CurFolder := '/';
 end;
 
-procedure TIFS_GSS.OpenStorage(Stream: TStream);
+procedure TifsGSS.OpenStorage(Stream: TStream);
 begin
   FStorage.Initialize(Stream);
   CurFolder := '/';

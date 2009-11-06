@@ -19,8 +19,13 @@ type
     RzToolButton3: TRzToolButton;
     pmListView: TPopupMenu;
     AddFile1: TMenuItem;
+    ExportFile1: TMenuItem;
+    dlgSave: TSaveDialog;
+    GetAttrs1: TMenuItem;
     procedure AddFile1Click(Sender: TObject);
+    procedure ExportFile1Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
+    procedure GetAttrs1Click(Sender: TObject);
     procedure RzToolButton1Click(Sender: TObject);
     procedure RzToolButton2Click(Sender: TObject);
     procedure RzToolButton3Click(Sender: TObject);
@@ -45,10 +50,11 @@ implementation
 {$R *.dfm}
 
 uses
-  IFS.GSS;
+  GpStructuredStorage,
+  IFS.Base, IFS.GSS, uIFSEGlobal;
 
 var
-  stg: TIFS_GSS;
+  stg: TifsGSS;
 
 procedure TfmIFSEMain.AddFile1Click(Sender: TObject);
 begin
@@ -68,9 +74,31 @@ begin
   tvFolder.Items.AddChild(n, 'Loading...').ImageIndex := -1;
 end;
 
+procedure TfmIFSEMain.ExportFile1Click(Sender: TObject);
+begin
+  if lvFile.Selected = nil then Exit;
+
+  if dlgSave.Execute then
+    stg.ExportFile(lvFile.Selected.Caption, dlgSave.FileName);
+end;
+
 procedure TfmIFSEMain.FormCreate(Sender: TObject);
 begin
-  stg := TIFS_GSS.Create;
+  stg := TifsGSS.Create;
+end;
+
+procedure TfmIFSEMain.GetAttrs1Click(Sender: TObject);
+var
+  fi: IGpStructuredFileInfo;
+  attrs: TStringList;
+  s: string;
+begin
+  fi := stg.Intf.FileInfo[stg.CurFolder+lvfile.Selected.Caption];
+  attrs := TStringList.Create;
+  fi.AttributeNames(attrs);
+  Log(IntToStr(attrs.Count));
+  for s in attrs do
+    Log(s+#9+fi.Attribute[s]);
 end;
 
 procedure TfmIFSEMain.InitFolderTree;
@@ -87,7 +115,7 @@ begin
   FolderNode.DeleteChildren;
   stg.FolderTraversal(
                       Folder,
-                      procedure(s: string)
+                      procedure(s: string; attr: TifsFileAttr)
                       begin
                         AddFolderNode(FolderNode, s);
                       end
@@ -144,7 +172,7 @@ begin
   lvFile.Items.Clear;
   stg.FileTraversal(
                     Folder,
-                    procedure(s: string)
+                    procedure(s: string; attr: TifsFileAttr)
                     begin
                       lvFile.Items.Add.Caption := s;
                     end
