@@ -6,7 +6,9 @@ uses
   IFS.GSS in '..\src\IFS\IFS.GSS.pas',
   IFS.Base in '..\src\IFS\IFS.Base.pas',
   uIFSEGlobal in '..\src\Explorer\uIFSEGlobal.pas',
-  IFS.StreamCodec in '..\src\IFS\IFS.StreamCodec.pas';
+  IFS.Stream in '..\src\IFS\IFS.Stream.pas',
+  IFS.Stream.Compressor in '..\src\IFS\IFS.Stream.Compressor.pas',
+  IFS.Stream.Encryptor in '..\src\IFS\IFS.Stream.Encryptor.pas';
 
 {$R *.res}
 

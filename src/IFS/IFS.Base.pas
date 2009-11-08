@@ -3,7 +3,8 @@ unit IFS.Base;
 interface
 
 uses
-  Windows, SysUtils, Classes;
+  Windows, SysUtils, Classes,
+  IFS.Stream;
 
 type
   /// <summary>
@@ -25,7 +26,7 @@ type
   /// <param name="StreamCodec">Indicates how to decode this stream.<para/>
   /// Each byte indicates a codec registered in codec-list.</param>
   TifsFileAttrEx = record
-    StreamCodec: array[0..15]of Byte;
+    StreamCodec: TifsCodecSequence;
     Description: ShortString;
   end;
 
@@ -42,6 +43,7 @@ type
     FVersion: string;
     function GetVersion: string; virtual; abstract;
   protected
+    function InternalOpenFile(const FileName: string; Mode: Word = fmOpenRead): TStream; virtual; abstract;
     procedure SetCurFolder(const Value: string); virtual;
   public
     constructor Create; virtual;
@@ -56,8 +58,8 @@ type
     procedure ImportFile(const LocalFile, DataFile: string); virtual; abstract;
     function IsIFS(const StorageFile: string): Boolean; overload; virtual; abstract;
     function IsIFS(Stream: TStream): Boolean; overload; virtual; abstract;
-    function OpenFile(const FileName: string; Mode: Word = fmOpenReadWrite): TStream; virtual; abstract;
-    procedure OpenStorage(const StorageFile: string; Mode: Word = fmOpenReadWrite); overload; virtual; abstract;
+    function OpenFile(const FileName: string; Mode: Word = fmOpenRead): TStream; virtual;
+    procedure OpenStorage(const StorageFile: string; Mode: Word = fmOpenRead); overload; virtual; abstract;
     procedure OpenStorage(Stream: TStream); overload; virtual; abstract;
     property CurFolder: string read FCurFolder write SetCurFolder;
     property PathDelim: Char read FPathDelim default '/';
@@ -78,6 +80,11 @@ begin
     Result := AName
   else
     Result := FCurFolder + Result;
+end;
+
+function TInfinityFS.OpenFile(const FileName: string; Mode: Word = fmOpenRead): TStream;
+begin
+  Result := TifsFileStream.Create(InternalOpenFile(FileName, Mode), GetFileAttrEx(FileName).StreamCodec);
 end;
 
 procedure TInfinityFS.SetCurFolder(const Value: string);

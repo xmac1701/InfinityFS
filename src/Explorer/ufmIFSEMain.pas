@@ -22,6 +22,8 @@ type
     ExportFile1: TMenuItem;
     dlgSave: TSaveDialog;
     GetAttrs1: TMenuItem;
+    Panel1: TPanel;
+    cboAddress: TComboBox;
     procedure AddFile1Click(Sender: TObject);
     procedure ExportFile1Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
@@ -183,6 +185,7 @@ procedure TfmIFSEMain.tvFolderChange(Sender: TObject; Node: TTreeNode);
 begin
   FCurFolderNode := tvFolder.Selected;
   stg.CurFolder := PathFromNode(FCurFolderNode);
+  cboAddress.Text := stg.CurFolder;
   ShowFolder(stg.CurFolder);
 end;
 

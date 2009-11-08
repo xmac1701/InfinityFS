@@ -3,14 +3,16 @@ unit IFS.GSS;
 interface
 
 uses
-  Windows, SysUtils, Classes,
-  IFS.Base,
+  Windows, SysUtils, Classes, Generics.Collections,
+  IFS.Base, IFS.Stream,
   GpStructuredStorage;
 
 type
   TifsGSS = class(TInfinityFS)
   private
     FStorage: IGpStructuredStorage;
+  protected
+    function InternalOpenFile(const FileName: string; Mode: Word = fmOpenRead): TStream; override;
   public
     constructor Create; override;
     procedure CloseStorage; override;
@@ -23,13 +25,24 @@ type
     procedure ImportFile(const LocalFile, DataFile: string); override;
     function IsIFS(const StorageFile: string): Boolean; overload; override;
     function IsIFS(Stream: TStream): Boolean; overload; override;
-    function OpenFile(const FileName: string; Mode: Word = fmOpenReadWrite): TStream; override;
-    procedure OpenStorage(const StorageFile: string; Mode: Word = fmOpenReadWrite); overload; override;
+    procedure OpenStorage(const StorageFile: string; Mode: Word = fmOpenRead); overload; override;
     procedure OpenStorage(Stream: TStream); overload; override;
     property Intf: IGpStructuredStorage read FStorage;
   end;
 
 implementation
+
+var
+  GSS_Reserved_Files: TList<string>;
+
+procedure Init_GSS_Global;
+begin
+  GSS_Reserved_Files := TList<string>.Create;
+  with GSS_Reserved_Files do
+  begin
+    Add('.ifsFileAttrEx');
+  end;
+end;
 
 constructor TifsGSS.Create;
 begin
@@ -55,7 +68,7 @@ begin
   stmRead := FStorage.OpenFile(GetFullName(DataFile), fmOpenRead);
   stmWrite := TFileStream.Create(LocalFile, fmCreate);
   try
-    stmWrite.CopyFrom(stmRead, stmRead.Size); //todo:  here can be extended
+    stmWrite.CopyFrom(stmRead, 0); //todo:  here can be extended
   finally
     stmRead.Free;
     stmWrite.Free;
@@ -71,7 +84,8 @@ begin
   try
     FStorage.FileNames(Folder, AList);
     for s in AList do
-      Callback(s, GetFileAttr(s));
+      if not GSS_Reserved_Files.Contains(s) then    // Do not process reserved files.
+        Callback(s, GetFileAttr(s));
   finally
     AList.Free;
   end;  // try
@@ -101,7 +115,8 @@ end;
 
 function TifsGSS.GetFileAttrEx(const FileName: string): TifsFileAttrEx;
 begin
-  // TODO -cMM: TifsGSS.GetFileAttrEx default body inserted
+  FillChar(Result.StreamCodec, MAX_CODEC_COUNT, $00);
+  Result.Description := '';
 end;
 
 procedure TifsGSS.ImportFile(const LocalFile, DataFile: string);
@@ -110,9 +125,9 @@ var
   stmRead: TFileStream;
 begin
   stmRead := TFileStream.Create(LocalFile, fmOpenRead);
-  stmWrite := FStorage.OpenFile(GetFullName(DataFile), fmCreate);
+  stmWrite := InternalOpenFile(DataFile, fmCreate);
   try
-    stmWrite.CopyFrom(stmRead, stmRead.Size);//todo: 这里可以扩展
+    stmWrite.CopyFrom(stmRead, 0);//todo: 这里可以扩展
   finally
     stmRead.Free;
     stmWrite.Free;
@@ -129,12 +144,12 @@ begin
   Result := FStorage.IsStructuredStorage(Stream);
 end;
 
-function TifsGSS.OpenFile(const FileName: string; Mode: Word = fmOpenReadWrite): TStream;
+function TifsGSS.InternalOpenFile(const FileName: string; Mode: Word = fmOpenRead): TStream;
 begin
   Result := FStorage.OpenFile(GetFullName(FileName), Mode);
 end;
 
-procedure TifsGSS.OpenStorage(const StorageFile: string; Mode: Word = fmOpenReadWrite);
+procedure TifsGSS.OpenStorage(const StorageFile: string; Mode: Word = fmOpenRead);
 begin
   FStorage.Initialize(StorageFile, Mode);
   CurFolder := '/';
@@ -145,5 +160,8 @@ begin
   FStorage.Initialize(Stream);
   CurFolder := '/';
 end;
+
+initialization
+  Init_GSS_Global;
 
 end.

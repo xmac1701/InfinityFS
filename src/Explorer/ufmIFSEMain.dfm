@@ -17,8 +17,8 @@ object fmIFSEMain: TfmIFSEMain
   TextHeight = 12
   object Splitter1: TSplitter
     Left = 200
-    Top = 29
-    Height = 308
+    Top = 57
+    Height = 280
     ExplicitLeft = 224
     ExplicitTop = 248
     ExplicitHeight = 100
@@ -61,9 +61,9 @@ object fmIFSEMain: TfmIFSEMain
   end
   object lvFile: TListView
     Left = 203
-    Top = 29
+    Top = 57
     Width = 432
-    Height = 308
+    Height = 280
     Align = alClient
     Columns = <
       item
@@ -76,12 +76,14 @@ object fmIFSEMain: TfmIFSEMain
     SmallImages = imgFolderView
     TabOrder = 1
     ViewStyle = vsReport
+    ExplicitTop = 29
+    ExplicitHeight = 308
   end
   object tvFolder: TCITreeView
     Left = 0
-    Top = 29
+    Top = 57
     Width = 200
-    Height = 308
+    Height = 280
     SelectionPen.Color = 16744448
     SelectionPen.Style = psDot
     Align = alLeft
@@ -99,6 +101,24 @@ object fmIFSEMain: TfmIFSEMain
     OnChange = tvFolderChange
     OnDeletion = tvFolderDeletion
     OnExpanding = tvFolderExpanding
+    ExplicitTop = 29
+    ExplicitHeight = 308
+  end
+  object Panel1: TPanel
+    Left = 0
+    Top = 29
+    Width = 635
+    Height = 28
+    Align = alTop
+    BevelOuter = bvNone
+    TabOrder = 3
+    object cboAddress: TComboBox
+      Left = 4
+      Top = 4
+      Width = 621
+      Height = 20
+      TabOrder = 0
+    end
   end
   object dlgOpen: TOpenDialog
     Left = 296
@@ -109,7 +129,7 @@ object fmIFSEMain: TfmIFSEMain
     Left = 80
     Top = 96
     Bitmap = {
-      494C010102006C00880010001000FFFFFFFF2110FFFFFFFFFFFFFFFF424D3600
+      494C010102006C008C0010001000FFFFFFFF2110FFFFFFFFFFFFFFFF424D3600
       0000000000003600000028000000400000001000000001002000000000000010
       0000000000000000000000000000000000000000000000000000000000000000
       000000000000999897FF999897FF999897FF1A1A1A7002020220000000000000
