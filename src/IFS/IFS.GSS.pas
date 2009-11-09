@@ -47,6 +47,7 @@ end;
 
 constructor TifsGSS.Create;
 begin
+  inherited;
   FStorage := GpStructuredStorage.CreateStructuredStorage;
 end;
 
@@ -118,7 +119,6 @@ function TifsGSS.GetFileAttrEx(const FileName: string): TifsFileAttrEx;
 begin
   Result.Compressor := $00;
   Result.Encryptor := $00;
-  Result.Description := '';
 end;
 
 function TifsGSS.GetVersion: UInt32;
@@ -141,6 +141,11 @@ begin
   end;
 end;
 
+function TifsGSS.InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream;
+begin
+  Result := FStorage.OpenFile(GetFullName(FileName), Mode);
+end;
+
 function TifsGSS.IsIFS(const StorageFile: string): Boolean;
 begin
   Result := FStorage.IsStructuredStorage(StorageFile);
@@ -149,11 +154,6 @@ end;
 function TifsGSS.IsIFS(Stream: TStream): Boolean;
 begin
   Result := FStorage.IsStructuredStorage(Stream);
-end;
-
-function TifsGSS.InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream;
-begin
-  Result := FStorage.OpenFile(GetFullName(FileName), Mode);
 end;
 
 procedure TifsGSS.OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead);

@@ -10,18 +10,23 @@ uses
 type
   TifsZLibCompressor = class(TifsCompressor)
   public
-    class function ID: Byte; override;
     class function Compress(Source: TStream): TStream; override;
     class function Decompress(Source: TStream): TStream; override;
+    class function ID: Byte; override;
   end;
 
 implementation
 
-{ TifsZLibCompressor }
-
-class function TifsZLibCompressor.ID: Byte;
+class function TifsZLibCompressor.Compress(Source: TStream): TStream;
+var
+  cmp: TZCompressionStream;
+  tmp: TMemoryStream;
 begin
-  Result := Byte('Z');
+  tmp := TMemoryStream.Create;
+  cmp := TZCompressionStream.Create(tmp, zcDefault{TZCompressionLevel(Param)});
+  cmp.CopyFrom(Source, Source.Size);
+  cmp.Free;
+  Result := tmp;
 end;
 
 class function TifsZLibCompressor.Decompress(Source: TStream): TStream;
@@ -36,16 +41,11 @@ begin
   Result := tmp;
 end;
 
-class function TifsZLibCompressor.Compress(Source: TStream): TStream;
-var
-  cmp: TZCompressionStream;
-  tmp: TMemoryStream;
+{ TifsZLibCompressor }
+
+class function TifsZLibCompressor.ID: Byte;
 begin
-  tmp := TMemoryStream.Create;
-  cmp := TZCompressionStream.Create(tmp, zcDefault{TZCompressionLevel(Param)});
-  cmp.CopyFrom(Source, Source.Size);
-  cmp.Free;
-  Result := tmp;
+  Result := Byte('Z');
 end;
 
 initialization

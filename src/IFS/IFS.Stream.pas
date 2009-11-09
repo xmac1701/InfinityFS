@@ -16,8 +16,8 @@ type
     FRawStream: TStream;
     procedure CheckPassword;
     function GetCompressor: UInt8;
-    function GetEncryptor: UInt8;
     procedure SetCompressor(const Value: Byte); inline;
+    function GetEncryptor: UInt8;
     procedure SetEncryptor(const Value: Byte); inline;
     procedure SetPassword(const Value: string); inline;
   protected
@@ -35,17 +35,17 @@ type
   TifsCompressorClass = class of TifsCompressor;
   TifsCompressor = class
   public
-    class function ID: UInt8; virtual;
     class function Compress(Source: TStream): TStream; virtual;
     class function Decompress(Source: TStream): TStream; virtual;
+    class function ID: UInt8; virtual;
   end;
 
   TifsEncryptorClass = class of TifsEncryptor;
   TifsEncryptor = class
   public
-    class function ID: UInt8; virtual;
-    class function Encrypt(Source: TStream; Key: string): TStream; virtual;
     class function Decrypt(Source: TStream; Key: string): TStream; virtual;
+    class function Encrypt(Source: TStream; Key: string): TStream; virtual;
+    class function ID: UInt8; virtual;
   end;
 
 procedure RegisterCompressor(Compressor: TifsCompressorClass);
@@ -70,8 +70,8 @@ procedure RegisterEncryptor(Encryptor: TifsEncryptorClass);
 var
   i: Int32;
 begin
-  i := Length(Compressors);
-  SetLength(Compressors, i+1);
+  i := Length(Encryptors);
+  SetLength(Encryptors, i+1);
   Encryptors[i] := Encryptor;
 end;
 
@@ -95,43 +95,42 @@ begin
   Result := TifsEncryptor;
 end;
 
+constructor TifsFileStream.Create(FS: TInfinityFS; const FileName: string; Stream: TStream);
+begin
+  inherited Create;
+
+  FProcessing := False;
+  FFileSystem := FS;
+  FRawStream := Stream;
+  FFileName := FileName;
+
+  FAttrEx := FFileSystem.GetFileAttrEx(FFileName);
+  CheckPassword;
+  LoadFromStream(FRawStream);
+  Decode;
+end;
+
+destructor TifsFileStream.Destroy;
+begin
+  Encode;
+  FRawStream.Size := 0;
+  FRawStream.CopyFrom(Self, Size);
+  inherited;
+end;
+
 { TifsFileStream }
 
 procedure TifsFileStream.CheckPassword;
 begin
-  FAttrEx := FFileSystem.GetFileAttrEx(FFileName);
   if (FAttrEx.Encryptor > $00) and (FPassword = '') then
     FFileSystem.OnPassword(FFileName, FPassword);
 end;
 
-function TifsFileStream.GetCompressor: UInt8;
-begin
-  Result := FAttrEx.Compressor;
-end;
-
-function TifsFileStream.GetEncryptor: UInt8;
-begin
-  Result := FAttrEx.Encryptor;
-end;
-
-procedure TifsFileStream.SetCompressor(const Value: Byte);
-begin
-  if not FProcessing then FAttrEx.Compressor := Value;
-end;
-
-procedure TifsFileStream.SetEncryptor(const Value: Byte);
-begin
-  if not FProcessing then FAttrEx.Encryptor := Value;
-end;
-
-procedure TifsFileStream.SetPassword(const Value: string);
-begin
-  if not FProcessing then FPassword := Value;
-end;
-
 /// <summary>
 /// Decode process:
-///   Decompress->Decrypt
+///   Load raw stream to temp
+///   Decompress->Decrypt (in temp)
+///   Load temp to self
 /// </summary>
 procedure TifsFileStream.Decode;
 var
@@ -163,7 +162,9 @@ end;
 
 /// <summary>
 /// Encode process:
-///   Encrypt->Compress
+///   Load self to temp
+///   Encrypt->Compress (in temp)
+///   Load temp to raw stream
 /// </summary>
 procedure TifsFileStream.Encode;
 var
@@ -175,43 +176,47 @@ begin
     if FAttrEx.Encryptor > $00 then
     begin
       if tmp.Size = 0 then
-        TMemoryStream(tmp).LoadFromStream(FRawStream);
+        TMemoryStream(tmp).LoadFromStream(Self);
       tmp := FindEncryptor(FAttrEx.Encryptor).Encrypt(tmp, FPassword);
     end;
 
     if FAttrEx.Compressor > $00 then
     begin
       if tmp.Size = 0 then
-        TMemoryStream(tmp).LoadFromStream(FRawStream);
+        TMemoryStream(tmp).LoadFromStream(Self);
       tmp := FindCompressor(FAttrEx.Compressor).Compress(tmp);
     end;
   finally
     if tmp.Size > 0 then
-      LoadFromStream(tmp);
+      FRawStream.CopyFrom(tmp, 0);
     tmp.Free;
     FProcessing := False;
   end;
 end;
 
-constructor TifsFileStream.Create(FS: TInfinityFS; const FileName: string; Stream: TStream);
+function TifsFileStream.GetCompressor: UInt8;
 begin
-  inherited Create;
-
-  FProcessing := False;
-  FFileSystem := FS;
-  FRawStream := Stream;
-  FFileName := FileName;
-
-  CheckPassword;
-  Decode;
+  Result := FAttrEx.Compressor;
 end;
 
-destructor TifsFileStream.Destroy;
+procedure TifsFileStream.SetCompressor(const Value: Byte);
 begin
-  Encode;
-  FRawStream.Size := 0;
-  FRawStream.CopyFrom(Self, Size);
-  inherited;
+  if not FProcessing then FAttrEx.Compressor := Value;
+end;
+
+function TifsFileStream.GetEncryptor: UInt8;
+begin
+  Result := FAttrEx.Encryptor;
+end;
+
+procedure TifsFileStream.SetEncryptor(const Value: Byte);
+begin
+  if not FProcessing then FAttrEx.Encryptor := Value;
+end;
+
+procedure TifsFileStream.SetPassword(const Value: string);
+begin
+  if not FProcessing then FPassword := Value;
 end;
 
 { TifsCompressor }
