@@ -36,16 +36,16 @@ type
   TifsCompressor = class
   public
     class function ID: UInt8; virtual;
-    class procedure Compress(Source, Target: TStream); virtual;
-    class procedure Decompress(Source, Target: TStream); virtual;
+    class function Compress(Source: TStream): TStream; virtual;
+    class function Decompress(Source: TStream): TStream; virtual;
   end;
 
   TifsEncryptorClass = class of TifsEncryptor;
   TifsEncryptor = class
   public
     class function ID: UInt8; virtual;
-    class procedure Encrypt(Source, Target: TStream; Key: string); virtual;
-    class procedure Decrypt(Source, Target: TStream; Key: string); virtual;
+    class function Encrypt(Source: TStream; Key: string): TStream; virtual;
+    class function Decrypt(Source: TStream; Key: string): TStream; virtual;
   end;
 
 procedure RegisterCompressor(Compressor: TifsCompressorClass);
@@ -135,7 +135,7 @@ end;
 /// </summary>
 procedure TifsFileStream.Decode;
 var
-  tmp: TMemoryStream;
+  tmp: TStream;
 begin
   FProcessing := True;
   tmp := TMemoryStream.Create;
@@ -143,15 +143,15 @@ begin
     if FAttrEx.Compressor > $00 then
     begin
       if tmp.Size = 0 then
-        tmp.LoadFromStream(FRawStream);
-      FindCompressor(FAttrEx.Compressor).Decompress(tmp, tmp);
+        TMemoryStream(tmp).LoadFromStream(FRawStream);
+      tmp := FindCompressor(FAttrEx.Compressor).Decompress(tmp);
     end;
 
     if FAttrEx.Encryptor > $00 then
     begin
       if tmp.Size = 0 then
-        tmp.LoadFromStream(FRawStream);
-      FindEncryptor(FAttrEx.Encryptor).Decrypt(tmp, tmp, FPassword);
+        TMemoryStream(tmp).LoadFromStream(FRawStream);
+      tmp := FindEncryptor(FAttrEx.Encryptor).Decrypt(tmp, FPassword);
     end;
   finally
     if tmp.Size > 0 then
@@ -167,7 +167,7 @@ end;
 /// </summary>
 procedure TifsFileStream.Encode;
 var
-  tmp: TMemoryStream;
+  tmp: TStream;
 begin
   FProcessing := True;
   tmp := TMemoryStream.Create;
@@ -175,15 +175,15 @@ begin
     if FAttrEx.Encryptor > $00 then
     begin
       if tmp.Size = 0 then
-        tmp.LoadFromStream(FRawStream);
-      FindEncryptor(FAttrEx.Encryptor).Encrypt(tmp, tmp, FPassword);
+        TMemoryStream(tmp).LoadFromStream(FRawStream);
+      tmp := FindEncryptor(FAttrEx.Encryptor).Encrypt(tmp, FPassword);
     end;
 
     if FAttrEx.Compressor > $00 then
     begin
       if tmp.Size = 0 then
-        tmp.LoadFromStream(FRawStream);
-      FindCompressor(FAttrEx.Compressor).Compress(tmp, tmp);
+        TMemoryStream(tmp).LoadFromStream(FRawStream);
+      tmp := FindCompressor(FAttrEx.Compressor).Compress(tmp);
     end;
   finally
     if tmp.Size > 0 then
@@ -216,12 +216,14 @@ end;
 
 { TifsCompressor }
 
-class procedure TifsCompressor.Compress(Source, Target: TStream);
+class function TifsCompressor.Compress(Source: TStream): TStream;
 begin
+  Result := Source;
 end;
 
-class procedure TifsCompressor.Decompress(Source, Target: TStream);
+class function TifsCompressor.Decompress(Source: TStream): TStream;
 begin
+  Result := Source;
 end;
 
 class function TifsCompressor.ID: UInt8;
@@ -231,12 +233,14 @@ end;
 
 { TifsEncryptor }
 
-class procedure TifsEncryptor.Decrypt(Source, Target: TStream; Key: string);
+class function TifsEncryptor.Decrypt(Source: TStream; Key: string): TStream;
 begin
+  Result := Source;
 end;
 
-class procedure TifsEncryptor.Encrypt(Source, Target: TStream; Key: string);
+class function TifsEncryptor.Encrypt(Source: TStream; Key: string): TStream;
 begin
+  Result := Source;
 end;
 
 class function TifsEncryptor.ID: UInt8;

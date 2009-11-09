@@ -11,8 +11,8 @@ type
   TifsZLibCompressor = class(TifsCompressor)
   public
     class function ID: Byte; override;
-    class procedure Compress(Source, Target: TStream); override;
-    class procedure Decompress(Source, Target: TStream); override;
+    class function Compress(Source: TStream): TStream; override;
+    class function Decompress(Source: TStream): TStream; override;
   end;
 
 implementation
@@ -24,7 +24,7 @@ begin
   Result := Byte('Z');
 end;
 
-class procedure TifsZLibCompressor.Decompress(Source, Target: TStream);
+class function TifsZLibCompressor.Decompress(Source: TStream): TStream;
 var
   decmp: TZDecompressionStream;
   tmp: TMemoryStream;
@@ -33,10 +33,10 @@ begin
   decmp := TZDecompressionStream.Create(Source);
   tmp.CopyFrom(decmp, 0);
   decmp.Free;
-  Target := tmp;
+  Result := tmp;
 end;
 
-class procedure TifsZLibCompressor.Compress(Source, Target: TStream);
+class function TifsZLibCompressor.Compress(Source: TStream): TStream;
 var
   cmp: TZCompressionStream;
   tmp: TMemoryStream;
@@ -45,7 +45,7 @@ begin
   cmp := TZCompressionStream.Create(tmp, zcDefault{TZCompressionLevel(Param)});
   cmp.CopyFrom(Source, Source.Size);
   cmp.Free;
-  Target := tmp;
+  Result := tmp;
 end;
 
 initialization

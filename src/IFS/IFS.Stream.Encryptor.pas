@@ -11,8 +11,8 @@ type
   TifsAESEncryptor = class(TifsEncryptor)
   public
     class function ID: Byte; override;
-    class procedure Encrypt(Source, Target: TStream; Key: string); override;
-    class procedure Decrypt(Source, Target: TStream; Key: string); override;
+    class function Encrypt(Source: TStream; Key: string): TStream; override;
+    class function Decrypt(Source: TStream; Key: string): TStream; override;
   end;
 
 implementation
@@ -24,14 +24,14 @@ begin
   Result := Byte('A');
 end;
 
-class procedure TifsAESEncryptor.Decrypt(Source, Target: TStream; Key: string);
+class function TifsAESEncryptor.Decrypt(Source: TStream; Key: string): TStream;
 begin
-  Target := AES.DecryptStream(Source, Key);
+  Result := AES.DecryptStream(Source, Key);
 end;
 
-class procedure TifsAESEncryptor.Encrypt(Source, Target: TStream; Key: string);
+class function TifsAESEncryptor.Encrypt(Source: TStream; Key: string): TStream;
 begin
-  Target := AES.EncryptStream(Source, Key);
+  Result := AES.EncryptStream(Source, Key);
 end;
 
 initialization
