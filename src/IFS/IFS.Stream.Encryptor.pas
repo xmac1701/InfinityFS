@@ -4,7 +4,7 @@ interface
 
 uses
   Classes,
-  IFS.Base, IFS.Stream,
+  IFS.Base,
   AES;
 
 type

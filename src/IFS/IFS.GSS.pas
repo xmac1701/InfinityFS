@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, SysUtils, Classes, Generics.Collections,
-  IFS.Base, IFS.Stream,
+  IFS.Base,
   GpStructuredStorage;
 
 type
@@ -36,7 +36,7 @@ implementation
 var
   GSS_Reserved_Files: TList<string>;
 
-procedure Init_GSS_Global;
+procedure GSS_Global_Init;
 begin
   GSS_Reserved_Files := TList<string>.Create;
   with GSS_Reserved_Files do
@@ -169,6 +169,6 @@ begin
 end;
 
 initialization
-  Init_GSS_Global;
+  GSS_Global_Init;
 
 end.
