@@ -12,7 +12,8 @@ type
   private
     FStorage: IGpStructuredStorage;
   protected
-    function InternalOpenFile(const FileName: string; Mode: Word = fmOpenRead): TStream; override;
+    function GetVersion: UInt32; override;
+    function InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream; override;
   public
     constructor Create; override;
     procedure CloseStorage; override;
@@ -25,7 +26,7 @@ type
     procedure ImportFile(const LocalFile, DataFile: string); override;
     function IsIFS(const StorageFile: string): Boolean; overload; override;
     function IsIFS(Stream: TStream): Boolean; overload; override;
-    procedure OpenStorage(const StorageFile: string; Mode: Word = fmOpenRead); overload; override;
+    procedure OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead); overload; override;
     procedure OpenStorage(Stream: TStream); overload; override;
     property Intf: IGpStructuredStorage read FStorage;
   end;
@@ -120,6 +121,11 @@ begin
   Result.Description := '';
 end;
 
+function TifsGSS.GetVersion: UInt32;
+begin
+  Result := $02000000;    // 2.0.0.0  Same to GSS version
+end;
+
 procedure TifsGSS.ImportFile(const LocalFile, DataFile: string);
 var
   stmWrite: TStream;
@@ -145,12 +151,12 @@ begin
   Result := FStorage.IsStructuredStorage(Stream);
 end;
 
-function TifsGSS.InternalOpenFile(const FileName: string; Mode: Word = fmOpenRead): TStream;
+function TifsGSS.InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream;
 begin
   Result := FStorage.OpenFile(GetFullName(FileName), Mode);
 end;
 
-procedure TifsGSS.OpenStorage(const StorageFile: string; Mode: Word = fmOpenRead);
+procedure TifsGSS.OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead);
 begin
   FStorage.Initialize(StorageFile, Mode);
   CurFolder := '/';

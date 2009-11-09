@@ -5,26 +5,26 @@ interface
 uses
   Classes, Generics.Collections, IFS.Base;
 
-const
-  MAX_CODEC_COUNT = 16;
-
 type
   TifsFileStream = class(TMemoryStream)
   private
     FAttrEx: TifsFileAttrEx;
+    FFileName: string;
+    FFileSystem: TInfinityFS;
     FPassword: string;
     FProcessing: Boolean;
     FRawStream: TStream;
-    function GetCompressor: Byte;
-    function GetEncryptor: Byte;
+    procedure CheckPassword;
+    function GetCompressor: UInt8;
+    function GetEncryptor: UInt8;
     procedure SetCompressor(const Value: Byte); inline;
     procedure SetEncryptor(const Value: Byte); inline;
     procedure SetPassword(const Value: string); inline;
   protected
-    procedure Encode;
     procedure Decode;
+    procedure Encode;
   public
-    constructor Create(FS: TInfinityFS; RawFileStream: TStream; AttrEx: TifsFileAttrEx);
+    constructor Create(FS: TInfinityFS; const FileName: string; Stream: TStream);
     destructor Destroy; override;
     property Compressor: Byte read GetCompressor write SetCompressor;
     property Encryptor: Byte read GetEncryptor write SetEncryptor;
@@ -33,19 +33,19 @@ type
   end;
 
   TifsCompressorClass = class of TifsCompressor;
-  TifsCompressor = class abstract
+  TifsCompressor = class
   public
-    class function ID: Byte; virtual; abstract;
-    class procedure Compress(Source, Target: TStream); virtual; abstract;
-    class procedure Decompress(Source, Target: TStream); virtual; abstract;
+    class function ID: UInt8; virtual;
+    class procedure Compress(Source, Target: TStream); virtual;
+    class procedure Decompress(Source, Target: TStream); virtual;
   end;
 
   TifsEncryptorClass = class of TifsEncryptor;
-  TifsEncryptor = class abstract
+  TifsEncryptor = class
   public
-    class function ID: Byte; virtual; abstract;
-    class procedure Encrypt(Source, Target: TStream; Key: string); virtual; abstract;
-    class procedure Decrypt(Source, Target: TStream; Key: string); virtual; abstract;
+    class function ID: UInt8; virtual;
+    class procedure Encrypt(Source, Target: TStream; Key: string); virtual;
+    class procedure Decrypt(Source, Target: TStream; Key: string); virtual;
   end;
 
 procedure RegisterCompressor(Compressor: TifsCompressorClass);
@@ -59,7 +59,7 @@ var
 
 procedure RegisterCompressor(Compressor: TifsCompressorClass);
 var
-  i: Integer;
+  i: Int32;
 begin
   i := Length(Compressors);
   SetLength(Compressors, i+1);
@@ -68,7 +68,7 @@ end;
 
 procedure RegisterEncryptor(Encryptor: TifsEncryptorClass);
 var
-  i: Integer;
+  i: Int32;
 begin
   i := Length(Compressors);
   SetLength(Compressors, i+1);
@@ -77,109 +77,39 @@ end;
 
 function FindCompressor(ID: Byte): TifsCompressorClass;
 var
-  i: Integer;
+  i: Int32;
 begin
-  for i := 1 to Length(Compressors) - 1 do
+  for i := Low(Compressors) to High(Compressors) do
     if Compressors[i].ID = ID then
       Exit(Compressors[i]);
+  Result := TifsCompressor;
 end;
 
 function FindEncryptor(ID: Byte): TifsEncryptorClass;
 var
-  i: Integer;
+  i: Int32;
 begin
-  for i := 1 to Length(Encryptors) - 1 do
+  for i := Low(Encryptors) to High(Encryptors) do
     if Encryptors[i].ID = ID then
       Exit(Encryptors[i]);
+  Result := TifsEncryptor;
 end;
 
-constructor TifsFileStream.Create(FS: TInfinityFS; RawFileStream: TStream; AttrEx: TifsFileAttrEx);
+{ TifsFileStream }
+
+procedure TifsFileStream.CheckPassword;
 begin
-  inherited Create;
-
-  FProcessing := False;
-  FRawStream := RawFileStream;
-  FAttrEx := AttrEx;
-
-  Decode;
+  FAttrEx := FFileSystem.GetFileAttrEx(FFileName);
+  if (FAttrEx.Encryptor > $00) and (FPassword = '') then
+    FFileSystem.OnPassword(FFileName, FPassword);
 end;
 
-destructor TifsFileStream.Destroy;
-begin
-  Encode;
-  FRawStream.Size := 0;
-  FRawStream.CopyFrom(Self, Size);
-  inherited;
-end;
-
-/// <summary>
-/// Encode process:
-///   Encrypt->Compress
-/// </summary>
-procedure TifsFileStream.Encode;
-var
-  tmp: TMemoryStream;
-  coder: TifsCompressorClass;
-begin
-  tmp := TMemoryStream.Create;
-  try
-    if FAttrEx.Encryptor > $00 then
-    begin
-      if tmp.Size = 0 then
-        tmp.LoadFromStream(FRawStream);
-      FindEncryptor(FAttrEx.Encryptor).Encrypt(tmp, tmp, FPassword);
-    end;
-
-    if FAttrEx.Compressor > $00 then
-    begin
-      if tmp.Size = 0 then
-        tmp.LoadFromStream(FRawStream);
-      FindCompressor(FAttrEx.Compressor).Compress(tmp, tmp);
-    end;
-  finally
-    if tmp.Size > 0 then
-      LoadFromStream(tmp);
-    tmp.Free;
-  end;
-end;
-
-/// <summary>
-/// Decode process:
-///   Decompress->Decrypt
-/// </summary>
-procedure TifsFileStream.Decode;
-var
-  tmp: TMemoryStream;
-  coder: TifsCompressorClass;
-begin
-  tmp := TMemoryStream.Create;
-  try
-    if FAttrEx.Compressor > $00 then
-    begin
-      if tmp.Size = 0 then
-        tmp.LoadFromStream(FRawStream);
-      FindCompressor(FAttrEx.Compressor).Decompress(tmp, tmp);
-    end;
-
-    if FAttrEx.Encryptor > $00 then
-    begin
-      if tmp.Size = 0 then
-        tmp.LoadFromStream(FRawStream);
-      FindEncryptor(FAttrEx.Encryptor).Decrypt(tmp, tmp, FPassword);
-    end;
-  finally
-    if tmp.Size > 0 then
-      LoadFromStream(tmp);
-    tmp.Free;
-  end;
-end;
-
-function TifsFileStream.GetCompressor: Byte;
+function TifsFileStream.GetCompressor: UInt8;
 begin
   Result := FAttrEx.Compressor;
 end;
 
-function TifsFileStream.GetEncryptor: Byte;
+function TifsFileStream.GetEncryptor: UInt8;
 begin
   Result := FAttrEx.Encryptor;
 end;
@@ -199,9 +129,123 @@ begin
   if not FProcessing then FPassword := Value;
 end;
 
-initialization
-  SetLength(Compressors, 1);
-  SetLength(Encryptors, 1);
+/// <summary>
+/// Decode process:
+///   Decompress->Decrypt
+/// </summary>
+procedure TifsFileStream.Decode;
+var
+  tmp: TMemoryStream;
+begin
+  FProcessing := True;
+  tmp := TMemoryStream.Create;
+  try
+    if FAttrEx.Compressor > $00 then
+    begin
+      if tmp.Size = 0 then
+        tmp.LoadFromStream(FRawStream);
+      FindCompressor(FAttrEx.Compressor).Decompress(tmp, tmp);
+    end;
 
+    if FAttrEx.Encryptor > $00 then
+    begin
+      if tmp.Size = 0 then
+        tmp.LoadFromStream(FRawStream);
+      FindEncryptor(FAttrEx.Encryptor).Decrypt(tmp, tmp, FPassword);
+    end;
+  finally
+    if tmp.Size > 0 then
+      LoadFromStream(tmp);
+    tmp.Free;
+    FProcessing := False;
+  end;
+end;
+
+/// <summary>
+/// Encode process:
+///   Encrypt->Compress
+/// </summary>
+procedure TifsFileStream.Encode;
+var
+  tmp: TMemoryStream;
+begin
+  FProcessing := True;
+  tmp := TMemoryStream.Create;
+  try
+    if FAttrEx.Encryptor > $00 then
+    begin
+      if tmp.Size = 0 then
+        tmp.LoadFromStream(FRawStream);
+      FindEncryptor(FAttrEx.Encryptor).Encrypt(tmp, tmp, FPassword);
+    end;
+
+    if FAttrEx.Compressor > $00 then
+    begin
+      if tmp.Size = 0 then
+        tmp.LoadFromStream(FRawStream);
+      FindCompressor(FAttrEx.Compressor).Compress(tmp, tmp);
+    end;
+  finally
+    if tmp.Size > 0 then
+      LoadFromStream(tmp);
+    tmp.Free;
+    FProcessing := False;
+  end;
+end;
+
+constructor TifsFileStream.Create(FS: TInfinityFS; const FileName: string; Stream: TStream);
+begin
+  inherited Create;
+
+  FProcessing := False;
+  FFileSystem := FS;
+  FRawStream := Stream;
+  FFileName := FileName;
+
+  CheckPassword;
+  Decode;
+end;
+
+destructor TifsFileStream.Destroy;
+begin
+  Encode;
+  FRawStream.Size := 0;
+  FRawStream.CopyFrom(Self, Size);
+  inherited;
+end;
+
+{ TifsCompressor }
+
+class procedure TifsCompressor.Compress(Source, Target: TStream);
+begin
+end;
+
+class procedure TifsCompressor.Decompress(Source, Target: TStream);
+begin
+end;
+
+class function TifsCompressor.ID: UInt8;
+begin
+  ID := $00;
+end;
+
+{ TifsEncryptor }
+
+class procedure TifsEncryptor.Decrypt(Source, Target: TStream; Key: string);
+begin
+end;
+
+class procedure TifsEncryptor.Encrypt(Source, Target: TStream; Key: string);
+begin
+end;
+
+class function TifsEncryptor.ID: UInt8;
+begin
+  Result := $00;
+end;
+
+initialization
+  RegisterCompressor(TifsCompressor);
+  RegisterEncryptor(TifsEncryptor);
 
 end.

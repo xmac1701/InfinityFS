@@ -26,8 +26,8 @@ type
   /// <param name="Encryptor">Indicate the encrypt method</param>
   /// <param name="Description">A short info for the file</param>
   TifsFileAttrEx = record
-    Compressor: Byte;
-    Encryptor: Byte;
+    Compressor: UInt8;
+    Encryptor: UInt8;
     Description: ShortString;
   end;
 
@@ -43,10 +43,10 @@ type
     FCurFolder: string;
     FOnPassword: TPasswordRequiredEvent;
     FPathDelim: Char;
-    FVersion: string;
-    function GetVersion: string; virtual; abstract;
+    FVersion: UInt32;
   protected
-    function InternalOpenFile(const FileName: string; Mode: Word = fmOpenRead): TStream; virtual; abstract;
+    function GetVersion: UInt32; virtual; abstract;
+    function InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream; virtual; abstract;
     procedure SetCurFolder(const Value: string); virtual;
   public
     constructor Create; virtual;
@@ -62,12 +62,11 @@ type
     function IsIFS(const StorageFile: string): Boolean; overload; virtual; abstract;
     function IsIFS(Stream: TStream): Boolean; overload; virtual; abstract;
     function OpenFile(const FileName: string; Mode: Word = fmOpenRead): TStream; virtual;
-    procedure OpenStorage(const StorageFile: string; Mode: Word = fmOpenRead); overload; virtual; abstract;
+    procedure OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead); overload; virtual; abstract;
     procedure OpenStorage(Stream: TStream); overload; virtual; abstract;
     property CurFolder: string read FCurFolder write SetCurFolder;
     property PathDelim: Char read FPathDelim default '/';
-    property Version: string read GetVersion;
-  published
+    property Version: UInt32 read GetVersion;
     property OnPassword: TPasswordRequiredEvent read FOnPassword write FOnPassword;
   end;
 
@@ -90,9 +89,9 @@ begin
     Result := FCurFolder + Result;
 end;
 
-function TInfinityFS.OpenFile(const FileName: string; Mode: Word = fmOpenRead): TStream;
+function TInfinityFS.OpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream;
 begin
-  Result := TifsFileStream.Create(Self, InternalOpenFile(FileName, Mode), GetFileAttrEx(FileName));
+  Result := TifsFileStream.Create(Self, FileName, InternalOpenFile(FileName, Mode));
 end;
 
 procedure TInfinityFS.SetCurFolder(const Value: string);
