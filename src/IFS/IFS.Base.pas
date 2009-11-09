@@ -3,8 +3,7 @@ unit IFS.Base;
 interface
 
 uses
-  Windows, SysUtils, Classes,
-  IFS.Stream;
+  Windows, SysUtils, Classes;
 
 type
   /// <summary>
@@ -23,14 +22,17 @@ type
   /// <summary>
   /// Extended attributes for files in IFS.
   /// </summary>
-  /// <param name="StreamCodec">Indicates how to decode this stream.<para/>
-  /// Each byte indicates a codec registered in codec-list.</param>
+  /// <param name="Compressor">Indicate the compress method</param>
+  /// <param name="Encryptor">Indicate the encrypt method</param>
+  /// <param name="Description">A short info for the file</param>
   TifsFileAttrEx = record
-    StreamCodec: TifsCodecSequence;
+    Compressor: Byte;
+    Encryptor: Byte;
     Description: ShortString;
   end;
 
-  TTraversalProc = reference to procedure(AFileName: string; Attr: TifsFileAttr);
+  TTraversalProc = reference to procedure(FileName: string; Attr: TifsFileAttr);
+  TPasswordRequiredEvent = procedure(FileName: string; var Password: string) of object;
 
 type
   /// <summary>
@@ -39,6 +41,7 @@ type
   TInfinityFS = class abstract
   private
     FCurFolder: string;
+    FOnPassword: TPasswordRequiredEvent;
     FPathDelim: Char;
     FVersion: string;
     function GetVersion: string; virtual; abstract;
@@ -64,9 +67,14 @@ type
     property CurFolder: string read FCurFolder write SetCurFolder;
     property PathDelim: Char read FPathDelim default '/';
     property Version: string read GetVersion;
+  published
+    property OnPassword: TPasswordRequiredEvent read FOnPassword write FOnPassword;
   end;
 
 implementation
+
+uses
+  IFS.Stream;
 
 constructor TInfinityFS.Create;
 begin
@@ -84,7 +92,7 @@ end;
 
 function TInfinityFS.OpenFile(const FileName: string; Mode: Word = fmOpenRead): TStream;
 begin
-  Result := TifsFileStream.Create(InternalOpenFile(FileName, Mode), GetFileAttrEx(FileName).StreamCodec);
+  Result := TifsFileStream.Create(Self, InternalOpenFile(FileName, Mode), GetFileAttrEx(FileName));
 end;
 
 procedure TInfinityFS.SetCurFolder(const Value: string);

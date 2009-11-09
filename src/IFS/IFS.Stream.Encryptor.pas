@@ -8,33 +8,33 @@ uses
   AES;
 
 type
-  TifsAESCoder = class(TifsCoder)
+  TifsAESEncryptor = class(TifsEncryptor)
   public
-    class function CoderID: Byte; override;
-    class procedure Encode(Source, Target: TStream; Param: LongInt); override;
-    class procedure Decode(Source, Target: TStream; Param: LongInt); override;
+    class function ID: Byte; override;
+    class procedure Encrypt(Source, Target: TStream; Key: string); override;
+    class procedure Decrypt(Source, Target: TStream; Key: string); override;
   end;
 
 implementation
 
-{ TifsAESCoder }
+{ TifsAESEncryptor }
 
-class function TifsAESCoder.CoderID: Byte;
+class function TifsAESEncryptor.ID: Byte;
 begin
-  Result := $11;
+  Result := Byte('A');
 end;
 
-class procedure TifsAESCoder.Decode(Source, Target: TStream; Param: Integer);
+class procedure TifsAESEncryptor.Decrypt(Source, Target: TStream; Key: string);
 begin
-  Target := AES.DecryptStream(Source, 'ifs');
+  Target := AES.DecryptStream(Source, Key);
 end;
 
-class procedure TifsAESCoder.Encode(Source, Target: TStream; Param: Integer);
+class procedure TifsAESEncryptor.Encrypt(Source, Target: TStream; Key: string);
 begin
-  Target := AES.EncryptStream(Source, 'ifs');
+  Target := AES.EncryptStream(Source, Key);
 end;
 
 initialization
-  RegisterCoder(TifsAESCoder);
+  RegisterEncryptor(TifsAESEncryptor);
 
 end.

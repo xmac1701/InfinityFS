@@ -115,7 +115,8 @@ end;
 
 function TifsGSS.GetFileAttrEx(const FileName: string): TifsFileAttrEx;
 begin
-  FillChar(Result.StreamCodec, MAX_CODEC_COUNT, $00);
+  Result.Compressor := $00;
+  Result.Encryptor := $00;
   Result.Description := '';
 end;
 
