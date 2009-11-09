@@ -24,7 +24,8 @@ type
     FCodec: TifsCodecSequence;
     FRawStream: TStream;
   protected
-    procedure ConvertData(DoEncode: Boolean = True);
+    procedure Encode;
+    procedure Decode;
   public
     constructor Create(RawFileStream: TStream; Codec: TifsCodecSequence);
     destructor Destroy; override;
@@ -63,37 +64,64 @@ begin
 
   FRawStream := RawFileStream;
   FCodec := Codec;
-  ConvertData(False);
+  Decode;
 end;
 
 destructor TifsFileStream.Destroy;
 begin
-  ConvertData(True);
+  Encode;
   FRawStream.Size := 0;
   FRawStream.CopyFrom(Self, Size);
   inherited;
 end;
 
-procedure TifsFileStream.ConvertData(DoEncode: Boolean = True);
+procedure TifsFileStream.Encode;
 var
-  c: Byte;
+  i: Byte;
   msIn, msOut: TMemoryStream;
   coder: TifsCoderClass;
 begin
   msIn := TMemoryStream.Create;
   try
     msIn.LoadFromStream(FRawStream);
-    for c in FCodec do
+    for i:=1 to MAX_CODEC_COUNT do
     begin
-      if c = $00 then Continue;    // The first element in codec-func-table is treated as NULL
+      if FCodec[i] = $00 then Continue;    // The first element in codec-func-table is treated as NULL
       msIn.Position := 0;
-      coder := CallCoder(c);
+      coder := CallCoder(FCodec[i]);
       if coder <> nil then
       begin
-        if DoEncode then
-          CallCoder(c).Encode(msIn, msOut, 0)
-        else
-          CallCoder(c).Decode(msIn, msOut, 0);
+        CallCoder(FCodec[i]).Encode(msIn, msOut, 0);
+        msIn.Free;
+        msIn := msOut;
+      end;
+    end;
+  finally
+    if Assigned(msOut) then
+    begin
+      LoadFromStream(msOut);
+      msOut.Free;
+    end;
+  end;
+end;
+
+procedure TifsFileStream.Decode;
+var
+  i: Byte;
+  msIn, msOut: TMemoryStream;
+  coder: TifsCoderClass;
+begin
+  msIn := TMemoryStream.Create;
+  try
+    msIn.LoadFromStream(FRawStream);
+    for i:= MAX_CODEC_COUNT downto 1 do
+    begin
+      if FCodec[i] = $00 then Continue;    // The first element in codec-func-table is treated as NULL
+      msIn.Position := 0;
+      coder := CallCoder(FCodec[i]);
+      if coder <> nil then
+      begin
+        CallCoder(FCodec[i]).Decode(msIn, msOut, 0);
         msIn.Free;
         msIn := msOut;
       end;
