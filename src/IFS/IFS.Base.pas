@@ -5,35 +5,59 @@ interface
 uses
   Windows, SysUtils, Classes;
 
+const
+{ File extended attribute constants }
+  faCompressed = $00010000;
+  faEncrypted  = $00020000;
+
 type
   /// <summary>
-  /// Basic attributes for files in IFS.
+  /// Attributes for files in IFS.
   /// </summary>
   /// <param name="Size">Size of the file</param>
-  /// <param name="Attribute"></param>
+  /// <param name="CreationTime">When we created the file</param>
+  /// <param name="LastModifyTime">When we last modified the file</param>
+  /// <param name="LastAccessTime">When we last accessed the file</param>
+  /// <param name="Compressed">Whether the file was compressed</param>
+  /// <param name="IsEncrypted">Whether the file was IsEncrypted</param>
   TifsFileAttr = record
     Size: Int64;
-    Attribute: UInt32;
     CreationTime: TDateTime;
-    LastWriteTime: TDateTime;
+    LastModifyTime: TDateTime;
     LastAccessTime: TDateTime;
+    Attribute: UInt32;
+    function IsArchive: Boolean; inline;
+    function IsCompressed: Boolean; inline;
+    function IsDirectory: Boolean; inline;
+    function IsEncrypted: Boolean; inline;
+    function IsHidden: Boolean; inline;
+    function IsReadOnly: Boolean; inline;
+    function IsSymLink: Boolean; inline;
+    function IsSysFile: Boolean; inline;
   end;
 
-  /// <summary>
-  /// Extended attributes for files in IFS.
-  /// </summary>
-  /// <param name="Compressor">Indicate the compress method</param>
-  /// <param name="Encryptor">Indicate the encrypt method</param>
-  TifsFileAttrEx = record
-    Compressor: UInt8;
-    Encryptor: UInt8;
+type
+  TifsCompressorClass = class of TifsCompressor;
+  TifsCompressor = class
+  public
+    class function Compress(Source: TStream): TStream; virtual;
+    class function Decompress(Source: TStream): TStream; virtual;
+    class function ID: UInt8; virtual;
   end;
 
+  TifsEncryptorClass = class of TifsEncryptor;
+  TifsEncryptor = class
+  public
+    class function Decrypt(Source: TStream; Key: string): TStream; virtual;
+    class function Encrypt(Source: TStream; Key: string): TStream; virtual;
+    class function ID: UInt8; virtual;
+  end;
+
+type
   TTraversalProc = reference to procedure(FileName: string; Attr: TifsFileAttr);
 
   TRequirePasswordEvent = procedure(FileName: string; var Password: string) of object;
 
-type
   /// <summary>
   /// Base class definition of Infinity File System.
   /// </summary>
@@ -43,28 +67,31 @@ type
     FOnPassword: TRequirePasswordEvent;
     FVersion: UInt32;
   protected
+    FCompressor: TifsCompressorClass;
+    FEncryptor: TifsEncryptorClass;
     FPathDelim: Char;
     procedure DoRequirePassword(const FileName: string; var Password: string);
     function InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream; virtual; abstract;
     procedure SetCurFolder(const Value: string); virtual;
     function GetVersion: UInt32; virtual; abstract;
+    procedure InternalOpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead); overload; virtual; abstract;
+    procedure InternalOpenStorage(Stream: TStream); overload; virtual; abstract;
   public
     constructor Create; virtual;
-    procedure ChangeFilePassword(const OldPassword, NewPassword: string; const EncryptorID: UInt8); virtual;
+    procedure ChangeFilePassword(const OldPassword, NewPassword: string); virtual;
     procedure CloseStorage; virtual; abstract;
     procedure CreateFolder(const NewFolderName: string); virtual; abstract;
     procedure ExportFile(const DataFile, LocalFile: string); virtual; abstract;
     procedure FileTraversal(const Folder: string; Callback: TTraversalProc); virtual; abstract;
     procedure FolderTraversal(const Folder: string; Callback: TTraversalProc); virtual; abstract;
     function GetFileAttr(const FileName: string): TifsFileAttr; virtual; abstract;
-    function GetFileAttrEx(const FileName: string): TifsFileAttrEx; virtual; abstract;
     function GetFullName(const AName: string): string;
     procedure ImportFile(const LocalFile, DataFile: string); virtual; abstract;
     function IsIFS(const StorageFile: string): Boolean; overload; virtual; abstract;
     function IsIFS(Stream: TStream): Boolean; overload; virtual; abstract;
     function OpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream; virtual;
-    procedure OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead); overload; virtual; abstract;
-    procedure OpenStorage(Stream: TStream); overload; virtual; abstract;
+    procedure OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead); overload; virtual;
+    procedure OpenStorage(Stream: TStream); overload; virtual;
     property CurFolder: string read FCurFolder write SetCurFolder;
     property PathDelim: Char read FPathDelim;
     property Version: UInt32 read GetVersion;
@@ -73,7 +100,7 @@ type
 
   TifsFileStream = class(TMemoryStream)
   private
-    FAttrEx: TifsFileAttrEx;
+    FAttr: TifsFileAttr;
     FFileName: string;
     FFileSystem: TInfinityFS;
     FPassword: string;
@@ -90,22 +117,6 @@ type
     destructor Destroy; override;
     property Password: string read FPassword write SetPassword;
     property RawStream: TStream read FRawStream;
-  end;
-
-  TifsCompressorClass = class of TifsCompressor;
-  TifsCompressor = class
-  public
-    class function Compress(Source: TStream): TStream; virtual;
-    class function Decompress(Source: TStream): TStream; virtual;
-    class function ID: UInt8; virtual;
-  end;
-
-  TifsEncryptorClass = class of TifsEncryptor;
-  TifsEncryptor = class
-  public
-    class function Decrypt(Source: TStream; Key: string): TStream; virtual;
-    class function Encrypt(Source: TStream; Key: string): TStream; virtual;
-    class function ID: UInt8; virtual;
   end;
 
 procedure RegisterCompressor(Compressor: TifsCompressorClass);
@@ -161,14 +172,12 @@ begin
   FPathDelim := '/';
 end;
 
-procedure TInfinityFS.ChangeFilePassword(const OldPassword, NewPassword: string; const EncryptorID: UInt8);
+procedure TInfinityFS.ChangeFilePassword(const OldPassword, NewPassword: string);
 begin
   // verify OldPassword
   // verify NewPassword
   //    if empty, kill encryption
-  // verify EncryptorID
-  //    if empty, kill encryption
-  // update AttributeEx
+  // update Attribute
 end;
 
 procedure TInfinityFS.DoRequirePassword(const FileName: string; var Password: string);
@@ -190,6 +199,18 @@ begin
   Result := TifsFileStream.Create(Self, FileName, Mode);
 end;
 
+procedure TInfinityFS.OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead);
+begin
+  InternalOpenStorage(StorageFile, Mode);
+  //todo: Check Compressor and Encryptor;
+end;
+
+procedure TInfinityFS.OpenStorage(Stream: TStream);
+begin
+  InternalOpenStorage(Stream);
+  //todo: Check Compressor and Encryptor;
+end;
+
 procedure TInfinityFS.SetCurFolder(const Value: string);
 begin
   FCurFolder := Value;
@@ -206,7 +227,7 @@ begin
 
   FProcessing := False;
   FRawStream := FS.InternalOpenFile(FileName, Mode);
-  FAttrEx := FFileSystem.GetFileAttrEx(FFileName);
+  FAttr := FFileSystem.GetFileAttr(FFileName);
   CheckPassword;
   LoadFromStream(FRawStream);
 
@@ -223,7 +244,7 @@ end;
 
 procedure TifsFileStream.CheckPassword;
 begin
-  if (FAttrEx.Encryptor > $00) and (FPassword = '') then
+  if FAttr.IsEncrypted and (FPassword = '') then
     FFileSystem.DoRequirePassword(FFileName, FPassword);
 end;
 
@@ -240,18 +261,18 @@ begin
   FProcessing := True;
   tmp := TMemoryStream.Create;
   try
-    if FAttrEx.Compressor > $00 then
+    if FAttr.IsCompressed then
     begin
       if tmp.Size = 0 then
         TMemoryStream(tmp).LoadFromStream(Self);
-      tmp := FindCompressor(FAttrEx.Compressor).Decompress(tmp);
+      tmp := FFileSystem.FCompressor.Decompress(tmp);
     end;
 
-    if FAttrEx.Encryptor > $00 then
+    if FAttr.IsEncrypted then
     begin
       if tmp.Size = 0 then
         TMemoryStream(tmp).LoadFromStream(Self);
-      tmp := FindEncryptor(FAttrEx.Encryptor).Decrypt(tmp, FPassword);
+      tmp := FFileSystem.FEncryptor.Decrypt(tmp, FPassword);
     end;
   finally
     if tmp.Size > 0 then
@@ -274,18 +295,18 @@ begin
   FProcessing := True;
   tmp := TMemoryStream.Create;
   try
-    if FAttrEx.Encryptor > $00 then
+    if FAttr.IsEncrypted then
     begin
       if tmp.Size = 0 then
         TMemoryStream(tmp).LoadFromStream(Self);
-      tmp := FindEncryptor(FAttrEx.Encryptor).Encrypt(tmp, FPassword);
+      tmp := FFileSystem.FEncryptor.Encrypt(tmp, FPassword);
     end;
 
-    if FAttrEx.Compressor > $00 then
+    if FAttr.IsCompressed then
     begin
       if tmp.Size = 0 then
         TMemoryStream(tmp).LoadFromStream(Self);
-      tmp := FindCompressor(FAttrEx.Compressor).Compress(tmp);
+      tmp := FFileSystem.FCompressor.Compress(tmp);
     end;
   finally
     if tmp.Size > 0 then
@@ -342,8 +363,49 @@ begin
   Result := $00;
 end;
 
+function TifsFileAttr.IsArchive: Boolean;
+begin
+  Result := (Attribute and faArchive) <> 0;
+end;
+
+function TifsFileAttr.IsCompressed: Boolean;
+begin
+  Result := (Attribute and faCompressed) <> 0;
+end;
+
+function TifsFileAttr.IsDirectory: Boolean;
+begin
+  Result := (Attribute and faDirectory) <> 0;
+end;
+
+function TifsFileAttr.IsEncrypted: Boolean;
+begin
+  Result := (Attribute and faEncrypted) <> 0;
+end;
+
+function TifsFileAttr.IsHidden: Boolean;
+begin
+  Result := (Attribute and faHidden) <> 0;
+end;
+
+function TifsFileAttr.IsReadOnly: Boolean;
+begin
+  Result := (Attribute and faReadOnly) <> 0;
+end;
+
+function TifsFileAttr.IsSymLink: Boolean;
+begin
+  Result := (Attribute and faSymLink) <> 0;
+end;
+
+function TifsFileAttr.IsSysFile: Boolean;
+begin
+  Result := (Attribute and faSysFile) <> 0;
+end;
+
 initialization
   RegisterCompressor(TifsCompressor);
   RegisterEncryptor(TifsEncryptor);
 
 end.
+

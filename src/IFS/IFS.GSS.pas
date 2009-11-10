@@ -22,7 +22,6 @@ type
     procedure FileTraversal(const Folder: string; Callback: TTraversalProc); override;
     procedure FolderTraversal(const Folder: string; Callback: TTraversalProc); override;
     function GetFileAttr(const FileName: string): TifsFileAttr; override;
-    function GetFileAttrEx(const FileName: string): TifsFileAttrEx; override;
     procedure ImportFile(const LocalFile, DataFile: string); override;
     function IsIFS(const StorageFile: string): Boolean; overload; override;
     function IsIFS(Stream: TStream): Boolean; overload; override;
@@ -112,13 +111,9 @@ function TifsGSS.GetFileAttr(const FileName: string): TifsFileAttr;
 var
   fi: IGpStructuredFileInfo;
 begin
-  fi := FStorage.FileInfo[GetFullName(FileName)];
-end;
-
-function TifsGSS.GetFileAttrEx(const FileName: string): TifsFileAttrEx;
-begin
-  Result.Compressor := $00;
-  Result.Encryptor := $00;
+  fi := FStorage.FileInfo[FileName];
+  Result.Size := fi.Size;
+  Result.Attribute := faArchive;
 end;
 
 function TifsGSS.GetVersion: UInt32;

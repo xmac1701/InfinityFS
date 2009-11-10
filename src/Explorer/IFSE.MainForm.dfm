@@ -76,8 +76,6 @@ object fmIFSEMain: TfmIFSEMain
     SmallImages = imgFolderView
     TabOrder = 1
     ViewStyle = vsReport
-    ExplicitTop = 29
-    ExplicitHeight = 308
   end
   object tvFolder: TCITreeView
     Left = 0
@@ -101,8 +99,6 @@ object fmIFSEMain: TfmIFSEMain
     OnChange = tvFolderChange
     OnDeletion = tvFolderDeletion
     OnExpanding = tvFolderExpanding
-    ExplicitTop = 29
-    ExplicitHeight = 308
   end
   object Panel1: TPanel
     Left = 0
@@ -129,7 +125,7 @@ object fmIFSEMain: TfmIFSEMain
     Left = 80
     Top = 96
     Bitmap = {
-      494C010102006C008C0010001000FFFFFFFF2110FFFFFFFFFFFFFFFF424D3600
+      494C010102006C00900010001000FFFFFFFF2110FFFFFFFFFFFFFFFF424D3600
       0000000000003600000028000000400000001000000001002000000000000010
       0000000000000000000000000000000000000000000000000000000000000000
       000000000000999897FF999897FF999897FF1A1A1A7002020220000000000000

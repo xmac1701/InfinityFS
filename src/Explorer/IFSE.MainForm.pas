@@ -1,4 +1,4 @@
-unit ufmIFSEMain;
+unit IFSE.MainForm;
 
 interface
 
@@ -53,7 +53,7 @@ implementation
 
 uses
   GpStructuredStorage,
-  IFS.Base, IFS.GSS, uIFSEGlobal;
+  IFS.Base, IFS.GSS, IFSE.Global;
 
 var
   stg: TifsGSS;

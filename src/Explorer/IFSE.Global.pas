@@ -1,4 +1,4 @@
-unit uIFSEGlobal;
+unit IFSE.Global;
 
 interface
 
