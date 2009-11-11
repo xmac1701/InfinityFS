@@ -50,36 +50,15 @@ type
   end;
 
 type
-  TifsCompressor = class
+  TifsTransportStream = class abstract(TStream)
+  protected
+    FStream: TStream;
   public
-    class function Compress(Source: TStream): TStream; virtual;
-    class function Decompress(Source: TStream): TStream; virtual;
-    class function ID: UInt8; virtual;
-    class function Name: string; virtual;
+    constructor Create(Source: TStream); virtual;
+    class function ID: UInt8; virtual; abstract;
+    class function Name: string; virtual; abstract;
   end;
-  TifsCompressorClass = class of TifsCompressor;
-
-  TifsEncryptor = class
-  public
-    class function Decrypt(Source: TStream; Key: string): TStream; virtual;
-    class function Encrypt(Source: TStream; Key: string): TStream; virtual;
-    class function ID: UInt8; virtual;
-    class function Name: string; virtual;
-  end;
-  TifsEncryptorClass = class of TifsEncryptor;
-
-type
-  /// <summary>
-  /// Cache all opened files.
-  /// </summary>
-  TifsFileCache = class
-  strict private
-    FCache: TDictionary<string, TStream>;
-  public
-    constructor Create;
-    procedure AddFile(const FileName: string; FileStream: TStream);
-    procedure ReleaseFile(const FileName: string);
-  end;
+  TifsTransportStreamClass = class of TifsTransportStream;
 
 type
   TTraversalProc = reference to procedure(FileName: string; Attr: TifsFileAttr);
@@ -96,11 +75,7 @@ type
     FCurFolder: string;
     FOnPassword: TRequirePasswordEvent;
     FVersion: UInt32;
-    procedure ReleaseCachedFile(const FileName: string);
   protected
-    FCompressor: TifsCompressorClass;
-    FEncryptor: TifsEncryptorClass;
-    FFileCache: TifsFileCache;
     FPathDelim: Char;
     class var IFS_Reserved_Files: TList<string>;
     class var IFS_Reserved_Folders: TList<string>;
@@ -142,7 +117,7 @@ type
     property OnPassword: TRequirePasswordEvent read FOnPassword write FOnPassword;
   end;
 
-  TifsFileStream = class(TMemoryStream)
+  TifsFileStream = class(TStream)
   private
     FAttr: TifsFileAttr;
     FFileName: string;
@@ -154,18 +129,22 @@ type
     procedure CheckPassword;
     procedure SetPassword(const Value: string); inline;
   protected
+    FCompressor: TifsTransportStream;
+    FEncryptor: TifsTransportStream;
     procedure Decode;
     procedure Encode;
     procedure Flush;
   public
     constructor Create(Owner: TInfinityFS; const FileName: string; const Mode: UInt16 = fmOpenRead);
     destructor Destroy; override;
+    function Read(var Buffer; Count: Longint): Longint; override;
+    function Write(const Buffer; Count: Longint): Longint; override;
     property Password: string read FPassword write SetPassword;
     property RawStream: TStream read FRawStream;
   end;
 
-procedure RegisterCompressor(Compressor: TifsCompressorClass);
-procedure RegisterEncryptor(Encryptor: TifsEncryptorClass);
+procedure RegisterCompressor(Compressor: TifsTransportStreamClass);
+procedure RegisterEncryptor(Encryptor: TifsTransportStreamClass);
 
 implementation
 
@@ -174,10 +153,10 @@ uses
 
 {$REGION 'Compressors and Encryptors Manager'}
 var
-  Compressors: array of TifsCompressorClass;
-  Encryptors: array of TifsEncryptorClass;
+  Compressors: array of TifsTransportStreamClass;
+  Encryptors: array of TifsTransportStreamClass;
 
-procedure RegisterCompressor(Compressor: TifsCompressorClass);
+procedure RegisterCompressor(Compressor: TifsTransportStreamClass);
 var
   i: Int32;
 begin
@@ -186,7 +165,7 @@ begin
   Compressors[i] := Compressor;
 end;
 
-procedure RegisterEncryptor(Encryptor: TifsEncryptorClass);
+procedure RegisterEncryptor(Encryptor: TifsTransportStreamClass);
 var
   i: Int32;
 begin
@@ -195,24 +174,24 @@ begin
   Encryptors[i] := Encryptor;
 end;
 
-function FindCompressor(ID: Byte): TifsCompressorClass;
+function FindCompressor(ID: Byte): TifsTransportStreamClass;
 var
   i: Int32;
 begin
   for i := Low(Compressors) to High(Compressors) do
     if Compressors[i].ID = ID then
       Exit(Compressors[i]);
-  Result := TifsCompressor;
+  raise EInfinityFS.Create('Invalid compressor id.');
 end;
 
-function FindEncryptor(ID: Byte): TifsEncryptorClass;
+function FindEncryptor(ID: Byte): TifsTransportStreamClass;
 var
   i: Int32;
 begin
   for i := Low(Encryptors) to High(Encryptors) do
     if Encryptors[i].ID = ID then
       Exit(Encryptors[i]);
-  Result := TifsEncryptor;
+  raise EInfinityFS.Create('Invalid encryptor id.');
 end;
 {$ENDREGION}
 
@@ -221,7 +200,6 @@ constructor TInfinityFS.Create;
 begin
   FVersion := GetVersion;
   FPathDelim := '/';
-  FFileCache := TifsFileCache.Create;
 end;
 
 class constructor TInfinityFS.Create;
@@ -232,7 +210,6 @@ end;
 
 destructor TInfinityFS.Destroy;
 begin
-  FFileCache.Free;
 
   inherited;
 end;
@@ -315,7 +292,6 @@ begin
     raise EInfinityFS.Create('You cannot open a reserved file, or files in reserved folders.');
 
   Result := TifsFileStream.Create(Self, fn, Mode);
-  FFileCache.AddFile(fn, Result);
 end;
 
 procedure TInfinityFS.OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead);
@@ -330,11 +306,6 @@ begin
   InternalOpenStorage(Stream);
   CheckCompressor;
   CheckEncryptor;
-end;
-
-procedure TInfinityFS.ReleaseCachedFile(const FileName: string);
-begin
-  FFileCache.ReleaseFile(FileName);
 end;
 
 procedure TInfinityFS.SetCurFolder(const Value: string);
@@ -355,8 +326,12 @@ begin
   FProcessing := False;
   FRawStream := Owner.InternalOpenFile(FileName, FMode);
   FAttr := FOwner.GetFileAttr(FFileName);
+
+  FEncryptor := FindEncryptor(FOwner.StorageAttr.Encryptor).Create(FRawStream);
+  FCompressor := FindCompressor(FOwner.StorageAttr.Compressor).Create(FEncryptor);
+
   CheckPassword;
-  LoadFromStream(FRawStream);
+  //LoadFromStream(FRawStream);
 
   Decode;
 end;
@@ -385,6 +360,7 @@ procedure TifsFileStream.Decode;
 var
   tmp: TStream;
 begin
+{
   FProcessing := True;
   tmp := TMemoryStream.Create;
   try
@@ -407,6 +383,7 @@ begin
     tmp.Free;
     FProcessing := False;
   end;
+}
 end;
 
 /// <summary>
@@ -419,6 +396,7 @@ procedure TifsFileStream.Encode;
 var
   tmp: TStream;
 begin
+{
   FProcessing := True;
   tmp := TMemoryStream.Create;
   try
@@ -441,6 +419,7 @@ begin
     tmp.Free;
     FProcessing := False;
   end;
+}
 end;
 
 procedure TifsFileStream.Flush;
@@ -451,53 +430,35 @@ begin
 
 end;
 
+/// <summary>
+/// Read(decode) process:
+///   Decompress->Decrypt
+/// </summary>
+function TifsFileStream.Read(var Buffer; Count: Longint): Longint;
+begin
+  Result := FEncryptor.Read(Buffer, Count);
+end;
+
 procedure TifsFileStream.SetPassword(const Value: string);
 begin
   if not FProcessing then FPassword := Value;
 end;
+
+/// <summary>
+/// Write(encode) process:
+///   Encrypt->Compress
+/// </summary>
+function TifsFileStream.Write(const Buffer; Count: Longint): Longint;
+begin
+  Result := FEncryptor.Write(Buffer, Count);
+end;
+
 {$ENDREGION}
 
-{$REGION 'TifsCompressor' }
-class function TifsCompressor.Compress(Source: TStream): TStream;
+{$REGION 'TifsTransportStream' }
+constructor TifsTransportStream.Create(Source: TStream);
 begin
-  Result := Source;
-end;
-
-class function TifsCompressor.Decompress(Source: TStream): TStream;
-begin
-  Result := Source;
-end;
-
-class function TifsCompressor.ID: UInt8;
-begin
-  Result := $00;
-end;
-
-class function TifsCompressor.Name: string;
-begin
-  Result := 'Null';
-end;
-{$ENDREGION}
-
-{$REGION 'TifsEncryptor' }
-class function TifsEncryptor.Decrypt(Source: TStream; Key: string): TStream;
-begin
-  Result := Source;
-end;
-
-class function TifsEncryptor.Encrypt(Source: TStream; Key: string): TStream;
-begin
-  Result := Source;
-end;
-
-class function TifsEncryptor.ID: UInt8;
-begin
-  Result := $00;
-end;
-
-class function TifsEncryptor.Name: string;
-begin
-  Result := 'Null';
+  FStream := Source;
 end;
 {$ENDREGION}
 
@@ -555,26 +516,10 @@ begin
 end;
 {$ENDREGION}
 
-{ TifsFileCache }
-
-procedure TifsFileCache.AddFile(const FileName: string; FileStream: TStream);
-begin
-  FCache.Add(FileName, FileStream);
-end;
-
-constructor TifsFileCache.Create;
-begin
-  FCache := TDictionary<string, TStream>.Create;
-end;
-
-procedure TifsFileCache.ReleaseFile(const FileName: string);
-begin
-  FCache.Remove(FileName);
-end;
-
 initialization
-  RegisterCompressor(TifsCompressor);
-  RegisterEncryptor(TifsEncryptor);
+  RegisterCompressor(TifsTransportStream);
+  RegisterEncryptor(TifsTransportStream);
 
 end.
+
 

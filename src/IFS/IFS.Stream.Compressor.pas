@@ -8,15 +8,23 @@ uses
   ZLib{, BZip2Ex};
 
 type
-  TifsZLibCompressor = class(TifsCompressor)
+  TifsZLibCompressor = class(TifsTransportStream)
   public
-    class function Compress(Source: TStream): TStream; override;
-    class function Decompress(Source: TStream): TStream; override;
+    constructor Create(Source: TStream); override;
+    class function Compress(Source: TStream): TStream;
+    class function Decompress(Source: TStream): TStream;
     class function ID: Byte; override;
     class function Name: string; override;
+    function Read(var Buffer; Count: Longint): Longint; virtual; abstract;
+    function Write(const Buffer; Count: Longint): Longint; virtual; abstract;
   end;
 
 implementation
+
+constructor TifsZLibCompressor.Create(Source: TStream);
+begin
+  FStream := Source;
+end;
 
 class function TifsZLibCompressor.Compress(Source: TStream): TStream;
 var

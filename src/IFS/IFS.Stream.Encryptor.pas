@@ -8,12 +8,14 @@ uses
   AES;
 
 type
-  TifsAESEncryptor = class(TifsEncryptor)
+  TifsAESEncryptor = class(TifsTransportStream)
   public
-    class function Decrypt(Source: TStream; Key: string): TStream; override;
-    class function Encrypt(Source: TStream; Key: string): TStream; override;
+    class function Decrypt(Source: TStream; Key: string): TStream;
+    class function Encrypt(Source: TStream; Key: string): TStream;
     class function ID: Byte; override;
     class function Name: string; override;
+    function Read(var Buffer; Count: Longint): Longint; virtual; abstract;
+    function Write(const Buffer; Count: Longint): Longint; virtual; abstract;
   end;
 
 implementation
