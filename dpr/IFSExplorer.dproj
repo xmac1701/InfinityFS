@@ -40,12 +40,12 @@
 			<DelphiCompile Include="IFSExplorer.dpr">
 				<MainSource>MainSource</MainSource>
 			</DelphiCompile>
-			<DCCReference Include="..\src\Explorer\IFSE.MainForm.pas">
+			<DCCReference Include="..\src\Explorer\IFSExplorer.MainForm.pas">
 				<Form>fmIFSEMain</Form>
 			</DCCReference>
 			<DCCReference Include="..\src\IFS\IFS.GSS.pas"/>
 			<DCCReference Include="..\src\IFS\IFS.Base.pas"/>
-			<DCCReference Include="..\src\Explorer\IFSE.Global.pas"/>
+			<DCCReference Include="..\src\Explorer\IFSExplorer.Global.pas"/>
 			<DCCReference Include="..\src\IFS\IFS.Stream.Compressor.pas"/>
 			<DCCReference Include="..\src\IFS\IFS.Stream.Encryptor.pas"/>
 			<BuildConfiguration Include="Base">

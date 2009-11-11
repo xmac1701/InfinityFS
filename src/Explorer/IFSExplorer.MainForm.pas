@@ -1,4 +1,4 @@
-unit IFSE.MainForm;
+unit IFSExplorer.MainForm;
 
 interface
 
@@ -39,6 +39,8 @@ type
     function PathFromNode(Node: TTreeNode): string;
   public
     procedure AddFolderNode(ParentNode: TTreeNode; const Folder: string);
+  // defaul for InvertCase property
+
     procedure InitFolderTree;
     procedure LoadFolder(FolderNode: TTreeNode; const Folder: string);
     procedure ShowFolder(const Folder: string);
@@ -52,8 +54,9 @@ implementation
 {$R *.dfm}
 
 uses
-  GpStructuredStorage,
-  IFS.Base, IFS.GSS, IFSE.Global;
+  GpStructuredStorage, RegExpr,
+  IFS.Base, IFS.GSS, IFSExplorer.Global;
+
 
 var
   stg: TifsGSS;
@@ -85,8 +88,14 @@ begin
 end;
 
 procedure TfmIFSEMain.FormCreate(Sender: TObject);
+var
+  rex: TRegExpr;
 begin
   stg := TifsGSS.Create;
+  rex := TRegExpr.Create;
+
+  if ExecRegExpr('/.*/\.ifsAttr', '/folder1/folder2/.ifsattr') then
+    Caption := '1';
 end;
 
 procedure TfmIFSEMain.GetAttrs1Click(Sender: TObject);

@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, SysUtils, Classes, Generics.Collections,
-  IFS.Base,
+  IFS.Base, IOUtils,
   GpStructuredStorage;
 
 type
@@ -12,42 +12,118 @@ type
   private
     FStorage: IGpStructuredStorage;
   protected
+    function GetFileAttr(const FileName: string): TifsFileAttr; override;
+    function GetStorageAttr: TifsStorageAttr; override;
     function GetVersion: UInt32; override;
     function InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream; override;
+    procedure InternalOpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead); overload; override;
+    procedure InternalOpenStorage(Stream: TStream); overload; override;
+    procedure SetFileAttr(const FileName: string; const Value: TifsFileAttr); override;
+    procedure SetStorageAttr(const Value: TifsStorageAttr); override;
   public
     constructor Create; override;
+    class constructor Create;
     procedure CloseStorage; override;
     procedure CreateFolder(const NewFolderName: string); override;
     procedure ExportFile(const DataFile, LocalFile: string); override;
     procedure FileTraversal(const Folder: string; Callback: TTraversalProc); override;
     procedure FolderTraversal(const Folder: string; Callback: TTraversalProc); override;
-    function GetFileAttr(const FileName: string): TifsFileAttr; override;
     procedure ImportFile(const LocalFile, DataFile: string); override;
     function IsIFS(const StorageFile: string): Boolean; overload; override;
     function IsIFS(Stream: TStream): Boolean; overload; override;
-    procedure OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead); overload; override;
-    procedure OpenStorage(Stream: TStream); overload; override;
     property Intf: IGpStructuredStorage read FStorage;
   end;
 
 implementation
 
-var
-  GSS_Reserved_Files: TList<string>;
+uses
+  RegExpr;
 
 procedure GSS_Global_Init;
 begin
-  GSS_Reserved_Files := TList<string>.Create;
-  with GSS_Reserved_Files do
+  with TifsGSS do
   begin
-    Add('.ifsFileAttrEx');
+    IFS_Reserved_Folders.Add('/$IFS$');
+
+    IFS_Reserved_Files.Add('.ifsStorageAttr');
+    IFS_Reserved_Files.Add('.ifsFileAttr');
   end;
+end;
+
+function ExecRegExpr(const ARegExpr, AInputStr : RegExprString): boolean;
+var
+  r : TRegExpr;
+begin
+  r := TRegExpr.Create;
+  try
+    r.ModifierI := True;
+    r.Expression := ARegExpr;
+    Result := r.Exec (AInputStr);
+  finally
+    r.Free;
+  end;
+end;
+
+function TifsGSS.GetFileAttr(const FileName: string): TifsFileAttr;
+var
+  fi: IGpStructuredFileInfo;
+begin
+  fi := FStorage.FileInfo[FileName];
+  Result.Size := fi.Size;
+  Result.Attribute := faArchive;
+end;
+
+function TifsGSS.GetStorageAttr: TifsStorageAttr;
+var
+  fs: TStream;
+begin
+// todo: get stg attr.
+//  fs := InternalOpenFile('/$IFS$/StorageAttribute', fmOpenRead);
+//  Result.;
+end;
+
+function TifsGSS.GetVersion: UInt32;
+begin
+  Result := $02000000;    // 2.0.0.0  Same to GSS version
+end;
+
+function TifsGSS.InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream;
+begin
+  Result := FStorage.OpenFile(GetFullName(FileName), Mode);
+end;
+
+procedure TifsGSS.InternalOpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead);
+begin
+  FStorage.Initialize(StorageFile, Mode);
+  CurFolder := '/';
+end;
+
+procedure TifsGSS.InternalOpenStorage(Stream: TStream);
+begin
+  FStorage.Initialize(Stream);
+  CurFolder := '/';
+end;
+
+procedure TifsGSS.SetFileAttr(const FileName: string; const Value: TifsFileAttr);
+begin
+  inherited;
+end;
+
+procedure TifsGSS.SetStorageAttr(const Value: TifsStorageAttr);
+begin
+  inherited;
 end;
 
 constructor TifsGSS.Create;
 begin
   inherited;
   FStorage := GpStructuredStorage.CreateStructuredStorage;
+end;
+
+class constructor TifsGSS.Create;
+begin
+  inherited;
+
 end;
 
 procedure TifsGSS.CloseStorage;
@@ -85,7 +161,7 @@ begin
   try
     FStorage.FileNames(Folder, AList);
     for s in AList do
-      if not GSS_Reserved_Files.Contains(s) then    // Do not process reserved files.
+      if not IFS_Reserved_Files.Contains(s) then    // Do not process reserved files.
         Callback(s, GetFileAttr(s));
   finally
     AList.Free;
@@ -101,24 +177,11 @@ begin
   try
     FStorage.FolderNames(Folder, AList);
     for s in AList do
-      Callback(s, GetFileAttr(s));
+      if not IFS_Reserved_Folders.Contains(s) then    // Do not process reserved files.
+        Callback(s, GetFileAttr(s));
   finally
     AList.Free;
   end;  // try
-end;
-
-function TifsGSS.GetFileAttr(const FileName: string): TifsFileAttr;
-var
-  fi: IGpStructuredFileInfo;
-begin
-  fi := FStorage.FileInfo[FileName];
-  Result.Size := fi.Size;
-  Result.Attribute := faArchive;
-end;
-
-function TifsGSS.GetVersion: UInt32;
-begin
-  Result := $02000000;    // 2.0.0.0  Same to GSS version
 end;
 
 procedure TifsGSS.ImportFile(const LocalFile, DataFile: string);
@@ -136,11 +199,6 @@ begin
   end;
 end;
 
-function TifsGSS.InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream;
-begin
-  Result := FStorage.OpenFile(GetFullName(FileName), Mode);
-end;
-
 function TifsGSS.IsIFS(const StorageFile: string): Boolean;
 begin
   Result := FStorage.IsStructuredStorage(StorageFile);
@@ -151,19 +209,9 @@ begin
   Result := FStorage.IsStructuredStorage(Stream);
 end;
 
-procedure TifsGSS.OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead);
-begin
-  FStorage.Initialize(StorageFile, Mode);
-  CurFolder := '/';
-end;
-
-procedure TifsGSS.OpenStorage(Stream: TStream);
-begin
-  FStorage.Initialize(Stream);
-  CurFolder := '/';
-end;
-
 initialization
   GSS_Global_Init;
 
 end.
+
+

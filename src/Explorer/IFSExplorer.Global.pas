@@ -1,4 +1,4 @@
-unit IFSE.Global;
+unit IFSExplorer.Global;
 
 interface
 

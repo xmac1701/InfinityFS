@@ -13,6 +13,7 @@ type
     class function Compress(Source: TStream): TStream; override;
     class function Decompress(Source: TStream): TStream; override;
     class function ID: Byte; override;
+    class function Name: string; override;
   end;
 
 implementation
@@ -46,6 +47,11 @@ end;
 class function TifsZLibCompressor.ID: Byte;
 begin
   Result := Byte('Z');
+end;
+
+class function TifsZLibCompressor.Name: string;
+begin
+  Result := 'ZLib';
 end;
 
 initialization
