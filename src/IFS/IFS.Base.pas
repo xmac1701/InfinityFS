@@ -50,15 +50,18 @@ type
   end;
 
 type
-  TifsTransportStream = class abstract(TStream)
+  TifsStreamBridge = class(TStream)
   protected
     FStream: TStream;
   public
+    class constructor Create;
     constructor Create(Source: TStream); virtual;
-    class function ID: UInt8; virtual; abstract;
-    class function Name: string; virtual; abstract;
+    class function ID: UInt8; virtual;
+    class function Name: string; virtual;
+    function Read(var Buffer; Count: Longint): Longint; override;
+    function Write(const Buffer; Count: Longint): Longint; override;
   end;
-  TifsTransportStreamClass = class of TifsTransportStream;
+  TifsStreamBridgeClass = class of TifsStreamBridge;
 
 type
   TTraversalProc = reference to procedure(FileName: string; Attr: TifsFileAttr);
@@ -129,11 +132,8 @@ type
     procedure CheckPassword;
     procedure SetPassword(const Value: string); inline;
   protected
-    FCompressor: TifsTransportStream;
-    FEncryptor: TifsTransportStream;
-    procedure Decode;
-    procedure Encode;
-    procedure Flush;
+    FCompressor: TifsStreamBridge;
+    FEncryptor: TifsStreamBridge;
   public
     constructor Create(Owner: TInfinityFS; const FileName: string; const Mode: UInt16 = fmOpenRead);
     destructor Destroy; override;
@@ -143,8 +143,8 @@ type
     property RawStream: TStream read FRawStream;
   end;
 
-procedure RegisterCompressor(Compressor: TifsTransportStreamClass);
-procedure RegisterEncryptor(Encryptor: TifsTransportStreamClass);
+procedure RegisterCompressor(Compressor: TifsStreamBridgeClass);
+procedure RegisterEncryptor(Encryptor: TifsStreamBridgeClass);
 
 implementation
 
@@ -153,10 +153,10 @@ uses
 
 {$REGION 'Compressors and Encryptors Manager'}
 var
-  Compressors: array of TifsTransportStreamClass;
-  Encryptors: array of TifsTransportStreamClass;
+  Compressors: array of TifsStreamBridgeClass;
+  Encryptors: array of TifsStreamBridgeClass;
 
-procedure RegisterCompressor(Compressor: TifsTransportStreamClass);
+procedure RegisterCompressor(Compressor: TifsStreamBridgeClass);
 var
   i: Int32;
 begin
@@ -165,7 +165,7 @@ begin
   Compressors[i] := Compressor;
 end;
 
-procedure RegisterEncryptor(Encryptor: TifsTransportStreamClass);
+procedure RegisterEncryptor(Encryptor: TifsStreamBridgeClass);
 var
   i: Int32;
 begin
@@ -174,24 +174,26 @@ begin
   Encryptors[i] := Encryptor;
 end;
 
-function FindCompressor(ID: Byte): TifsTransportStreamClass;
+function FindCompressor(ID: Byte): TifsStreamBridgeClass;
 var
   i: Int32;
 begin
   for i := Low(Compressors) to High(Compressors) do
     if Compressors[i].ID = ID then
       Exit(Compressors[i]);
-  raise EInfinityFS.Create('Invalid compressor id.');
+  //raise EInfinityFS.Create('Invalid compressor id.');
+  Result := TifsStreamBridge;
 end;
 
-function FindEncryptor(ID: Byte): TifsTransportStreamClass;
+function FindEncryptor(ID: Byte): TifsStreamBridgeClass;
 var
   i: Int32;
 begin
   for i := Low(Encryptors) to High(Encryptors) do
     if Encryptors[i].ID = ID then
       Exit(Encryptors[i]);
-  raise EInfinityFS.Create('Invalid encryptor id.');
+//  raise EInfinityFS.Create('Invalid encryptor id.');
+  Result := TifsStreamBridge;
 end;
 {$ENDREGION}
 
@@ -327,19 +329,16 @@ begin
   FRawStream := Owner.InternalOpenFile(FileName, FMode);
   FAttr := FOwner.GetFileAttr(FFileName);
 
-  FEncryptor := FindEncryptor(FOwner.StorageAttr.Encryptor).Create(FRawStream);
-  FCompressor := FindCompressor(FOwner.StorageAttr.Compressor).Create(FEncryptor);
+  FCompressor := FindCompressor(FOwner.StorageAttr.Compressor).Create(FRawStream);
+  FEncryptor := FindEncryptor(FOwner.StorageAttr.Encryptor).Create(FCompressor);
 
   CheckPassword;
-  //LoadFromStream(FRawStream);
-
-  Decode;
 end;
 
 destructor TifsFileStream.Destroy;
 begin
-  Encode;
-  Flush;
+  FEncryptor.Free;
+  FCompressor.Free;
 
   inherited;
 end;
@@ -348,86 +347,6 @@ procedure TifsFileStream.CheckPassword;
 begin
   if FAttr.IsEncrypted and (FPassword = '') then
     FOwner.DoRequirePassword(FFileName, FPassword);
-end;
-
-/// <summary>
-/// Decode process:
-///   Load self to temp
-///   Decompress->Decrypt (in temp)
-///   Load temp to self
-/// </summary>
-procedure TifsFileStream.Decode;
-var
-  tmp: TStream;
-begin
-{
-  FProcessing := True;
-  tmp := TMemoryStream.Create;
-  try
-    if FAttr.IsCompressed then
-    begin
-      if tmp.Size = 0 then
-        TMemoryStream(tmp).LoadFromStream(Self);
-      tmp := FOwner.FCompressor.Decompress(tmp);
-    end;
-
-    if FAttr.IsEncrypted then
-    begin
-      if tmp.Size = 0 then
-        TMemoryStream(tmp).LoadFromStream(Self);
-      tmp := FOwner.FEncryptor.Decrypt(tmp, FPassword);
-    end;
-  finally
-    if tmp.Size > 0 then
-      LoadFromStream(tmp);
-    tmp.Free;
-    FProcessing := False;
-  end;
-}
-end;
-
-/// <summary>
-/// Encode process:
-///   Load self to temp
-///   Encrypt->Compress (in temp)
-///   Load temp to self
-/// </summary>
-procedure TifsFileStream.Encode;
-var
-  tmp: TStream;
-begin
-{
-  FProcessing := True;
-  tmp := TMemoryStream.Create;
-  try
-    if FAttr.IsEncrypted then
-    begin
-      if tmp.Size = 0 then
-        TMemoryStream(tmp).LoadFromStream(Self);
-      tmp := FOwner.FEncryptor.Encrypt(tmp, FPassword);
-    end;
-
-    if FAttr.IsCompressed then
-    begin
-      if tmp.Size = 0 then
-        TMemoryStream(tmp).LoadFromStream(Self);
-      tmp := FOwner.FCompressor.Compress(tmp);
-    end;
-  finally
-    if tmp.Size > 0 then
-      LoadFromStream(tmp);
-    tmp.Free;
-    FProcessing := False;
-  end;
-}
-end;
-
-procedure TifsFileStream.Flush;
-begin
-  FRawStream.Size := 0;
-  FRawStream.CopyFrom(Self, 0);
-  // Update AttributeEx
-
 end;
 
 /// <summary>
@@ -456,10 +375,37 @@ end;
 {$ENDREGION}
 
 {$REGION 'TifsTransportStream' }
-constructor TifsTransportStream.Create(Source: TStream);
+class constructor TifsStreamBridge.Create;
+begin
+  RegisterCompressor(TifsStreamBridge);
+  RegisterEncryptor(TifsStreamBridge);
+end;
+
+constructor TifsStreamBridge.Create(Source: TStream);
 begin
   FStream := Source;
 end;
+
+class function TifsStreamBridge.ID: UInt8;
+begin
+  Result := $00;
+end;
+
+class function TifsStreamBridge.Name: string;
+begin
+  Result := 'Null';
+end;
+
+function TifsStreamBridge.Read(var Buffer; Count: Longint): Longint;
+begin
+  Result := FStream.Read(Buffer, Count);
+end;
+
+function TifsStreamBridge.Write(const Buffer; Count: Longint): Longint;
+begin
+  Result := FStream.Write(Buffer, Count);
+end;
+
 {$ENDREGION}
 
 {$REGION 'TifsFileAttr'}
@@ -515,10 +461,6 @@ begin
   Result := FindEncryptor(Encryptor).Name;
 end;
 {$ENDREGION}
-
-initialization
-  RegisterCompressor(TifsTransportStream);
-  RegisterEncryptor(TifsTransportStream);
 
 end.
 

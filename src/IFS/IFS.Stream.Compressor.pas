@@ -8,49 +8,38 @@ uses
   ZLib{, BZip2Ex};
 
 type
-  TifsZLibCompressor = class(TifsTransportStream)
+  TifsZLibCompressor = class(TifsStreamBridge)
+  private
+    ZComp: TZCompressionStream;
+    ZDecomp: TZDecompressionStream;
   public
-    constructor Create(Source: TStream); override;
-    class function Compress(Source: TStream): TStream;
-    class function Decompress(Source: TStream): TStream;
+    class constructor Create;
+    constructor Create(RawFileStream: TStream); override;
     class function ID: Byte; override;
     class function Name: string; override;
-    function Read(var Buffer; Count: Longint): Longint; virtual; abstract;
-    function Write(const Buffer; Count: Longint): Longint; virtual; abstract;
+    function Read(var Buffer; Count: Longint): Longint; override;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; overload; override;
+    function Write(const Buffer; Count: Longint): Longint; override;
   end;
 
 implementation
 
-constructor TifsZLibCompressor.Create(Source: TStream);
-begin
-  FStream := Source;
-end;
-
-class function TifsZLibCompressor.Compress(Source: TStream): TStream;
-var
-  cmp: TZCompressionStream;
-  tmp: TMemoryStream;
-begin
-  tmp := TMemoryStream.Create;
-  cmp := TZCompressionStream.Create(tmp, zcDefault{TZCompressionLevel(Param)});
-  cmp.CopyFrom(Source, Source.Size);
-  cmp.Free;
-  Result := tmp;
-end;
-
-class function TifsZLibCompressor.Decompress(Source: TStream): TStream;
-var
-  decmp: TZDecompressionStream;
-  tmp: TMemoryStream;
-begin
-  tmp := TMemoryStream.Create;
-  decmp := TZDecompressionStream.Create(Source);
-  tmp.CopyFrom(decmp, 0);
-  decmp.Free;
-  Result := tmp;
-end;
-
 { TifsZLibCompressor }
+
+class constructor TifsZLibCompressor.Create;
+begin
+  RegisterCompressor(TifsZLibCompressor);
+end;
+
+/// <summary>
+/// Compressor faces to the raw file stream opened by IFS.
+/// </summary>
+constructor TifsZLibCompressor.Create(RawFileStream: TStream);
+begin
+  inherited;
+  ZComp := TZCompressionStream.Create(RawFileStream, zcDefault{TZCompressionLevel(Param)});
+  ZDecomp := TZDecompressionStream.Create(RawFileStream);
+end;
 
 class function TifsZLibCompressor.ID: Byte;
 begin
@@ -62,7 +51,19 @@ begin
   Result := 'ZLib';
 end;
 
-initialization
-  RegisterCompressor(TifsZLibCompressor);
+function TifsZLibCompressor.Read(var Buffer; Count: Longint): Longint;
+begin
+  Result := ZDecomp.Read(Buffer, Count);
+end;
+
+function TifsZLibCompressor.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+begin
+  Result := ZDecomp.Seek(Offset, Origin);
+end;
+
+function TifsZLibCompressor.Write(const Buffer; Count: Longint): Longint;
+begin
+  Result := ZComp.Write(Buffer, Count);
+end;
 
 end.
