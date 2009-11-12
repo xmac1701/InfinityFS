@@ -1,9 +1,9 @@
-unit IFS.Stream.Encryptor;
+unit IFS.Stream.Encryptor experimental;
 
 interface
 
 uses
-  Classes,
+  SysUtils, Classes,
   IFS.Base,
   AES;
 
@@ -58,30 +58,35 @@ end;
 /// </summary>
 function TifsAESEncryptor.Read(var Buffer; Count: Longint): Longint;
 var
-  StartPos, EndCount: Int64;
-  Offset: Int8;
-  tmp: TMemoryStream;
+  StartPos: Int64;  //< The position we can start to read
+  EndCount: Int64;  //< The bytes count we should read to decrypt
+  Offset: Int8;     //< Offset between StartPos and current FStream.Position
+  tmp: TMemoryStream;   //< Temporary stream for decrypt
 begin
-  Result := 0;
-  // 1. Decide the buffer to read.
-  // if current position not in the start position of any valid AES-buffer, read from the previous buffer-block.
   StartPos := Position;
+  // Correct total bytes we can read.
+  if StartPos + Count > Size then
+    Count := Size - StartPos;
+  // Decide the buffer to read.
+  // If current position is in the middle of some valid AES-buffer, set the StartPos to the start of that buffer,
+  // and calculate offset.
   Offset := StartPos mod AESBufferSize;
   StartPos := StartPos - Offset;
-  // 2. Decide the total size to read.
-  // if StartPos+Count cannot cover a entire AES-buffer, extend the EndCount to a AES-buffer's end.
+  // Decide bytes count to read.
+  // if StartPos+Count cannot cover an entire AES-buffer, extend the EndCount to that buffer's end.
   EndCount := Offset + Count + AESBufferSize - ((Offset + Count) mod AESBufferSize);
 
   tmp := TMemoryStream.Create;
   try
-    // First write the size of total data in byte. This will make AES.DecryptStream happy.
+    // First write the size of total data in byte to make AES.DecryptStream happy.
     tmp.Write(EndCount, SizeOf(EndCount));
+    FStream.Position := StartPos;
     tmp.CopyFrom(FStream, EndCount);
     tmp := AES.DecryptStream(tmp, FKey) as TMemoryStream;
-    // OK, we got the decrypted stream. Reset position to offset, so we can pass the data that we don't want.
+    // OK, we got the decrypted stream. Reset position to offset, so we can ignore the needless data.
     tmp.Position := Offset;
     // Read the decrypted data to buffer.
-    tmp.Read(Buffer, Count);
+    Result := tmp.Read(Buffer, Count);
   finally
     tmp.Free;
   end;  // try
@@ -96,8 +101,17 @@ end;
 /// Write is the encrypt procedure.
 /// </summary>
 function TifsAESEncryptor.Write(const Buffer; Count: Longint): Longint;
+var
+  OldPos: Int64;
+  tmp: TMemoryStream;
+  buf: TBytes;
+  bufLen: Int64;
 begin
-  Result := inherited Write(Buffer, Count);
+  OldPos := FStream.Position;
+  // Prepare a buffer for decrypted data. We must write Buffer into it, then encrypt it again. And write back to FStream.
+  SetLength(buf, Count);
+  bufLen := Read(buf, Count);
+
 end;
 
 end.

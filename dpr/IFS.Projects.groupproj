@@ -1,0 +1,48 @@
+﻿	<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+		<PropertyGroup>
+			<ProjectGuid>{96C0EEF5-56D0-45A8-8375-4BF17385902C}</ProjectGuid>
+		</PropertyGroup>
+		<ItemGroup>
+			<Projects Include="IFSTests.dproj">
+				<Dependencies/>
+			</Projects>
+			<Projects Include="IFSExplorer.dproj">
+				<Dependencies/>
+			</Projects>
+		</ItemGroup>
+		<ProjectExtensions>
+			<Borland.Personality>Default.Personality.12</Borland.Personality>
+			<Borland.ProjectType/>
+			<BorlandProject>
+				<Default.Personality/>
+			</BorlandProject>
+		</ProjectExtensions>
+		<Target Name="IFSTests">
+			<MSBuild Projects="IFSTests.dproj"/>
+		</Target>
+		<Target Name="IFSTests:Clean">
+			<MSBuild Targets="Clean" Projects="IFSTests.dproj"/>
+		</Target>
+		<Target Name="IFSTests:Make">
+			<MSBuild Targets="Make" Projects="IFSTests.dproj"/>
+		</Target>
+		<Target Name="IFSExplorer">
+			<MSBuild Projects="IFSExplorer.dproj"/>
+		</Target>
+		<Target Name="IFSExplorer:Clean">
+			<MSBuild Targets="Clean" Projects="IFSExplorer.dproj"/>
+		</Target>
+		<Target Name="IFSExplorer:Make">
+			<MSBuild Targets="Make" Projects="IFSExplorer.dproj"/>
+		</Target>
+		<Target Name="Build">
+			<CallTarget Targets="IFSTests;IFSExplorer"/>
+		</Target>
+		<Target Name="Clean">
+			<CallTarget Targets="IFSTests:Clean;IFSExplorer:Clean"/>
+		</Target>
+		<Target Name="Make">
+			<CallTarget Targets="IFSTests:Make;IFSExplorer:Make"/>
+		</Target>
+		<Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+	</Project>

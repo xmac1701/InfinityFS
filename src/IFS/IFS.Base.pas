@@ -185,14 +185,19 @@ begin
   Result := TifsStreamBridge;
 end;
 
+/// <summary>
+/// Encryptor is still in experimental stage. Not ready for use.
+/// </summary>
 function FindEncryptor(ID: Byte): TifsStreamBridgeClass;
 var
   i: Int32;
 begin
+{
   for i := Low(Encryptors) to High(Encryptors) do
     if Encryptors[i].ID = ID then
       Exit(Encryptors[i]);
 //  raise EInfinityFS.Create('Invalid encryptor id.');
+}
   Result := TifsStreamBridge;
 end;
 {$ENDREGION}
