@@ -3,10 +3,13 @@
 			<ProjectGuid>{96C0EEF5-56D0-45A8-8375-4BF17385902C}</ProjectGuid>
 		</PropertyGroup>
 		<ItemGroup>
-			<Projects Include="IFSTests.dproj">
+			<Projects Include="IFS.dproj">
 				<Dependencies/>
 			</Projects>
 			<Projects Include="IFSExplorer.dproj">
+				<Dependencies/>
+			</Projects>
+			<Projects Include="IFSTests.dproj">
 				<Dependencies/>
 			</Projects>
 		</ItemGroup>
@@ -17,14 +20,14 @@
 				<Default.Personality/>
 			</BorlandProject>
 		</ProjectExtensions>
-		<Target Name="IFSTests">
-			<MSBuild Projects="IFSTests.dproj"/>
+		<Target Name="IFS">
+			<MSBuild Projects="IFS.dproj"/>
 		</Target>
-		<Target Name="IFSTests:Clean">
-			<MSBuild Targets="Clean" Projects="IFSTests.dproj"/>
+		<Target Name="IFS:Clean">
+			<MSBuild Targets="Clean" Projects="IFS.dproj"/>
 		</Target>
-		<Target Name="IFSTests:Make">
-			<MSBuild Targets="Make" Projects="IFSTests.dproj"/>
+		<Target Name="IFS:Make">
+			<MSBuild Targets="Make" Projects="IFS.dproj"/>
 		</Target>
 		<Target Name="IFSExplorer">
 			<MSBuild Projects="IFSExplorer.dproj"/>
@@ -35,14 +38,23 @@
 		<Target Name="IFSExplorer:Make">
 			<MSBuild Targets="Make" Projects="IFSExplorer.dproj"/>
 		</Target>
+		<Target Name="IFSTests">
+			<MSBuild Projects="IFSTests.dproj"/>
+		</Target>
+		<Target Name="IFSTests:Clean">
+			<MSBuild Targets="Clean" Projects="IFSTests.dproj"/>
+		</Target>
+		<Target Name="IFSTests:Make">
+			<MSBuild Targets="Make" Projects="IFSTests.dproj"/>
+		</Target>
 		<Target Name="Build">
-			<CallTarget Targets="IFSTests;IFSExplorer"/>
+			<CallTarget Targets="IFS;IFSExplorer;IFSTests"/>
 		</Target>
 		<Target Name="Clean">
-			<CallTarget Targets="IFSTests:Clean;IFSExplorer:Clean"/>
+			<CallTarget Targets="IFS:Clean;IFSExplorer:Clean;IFSTests:Clean"/>
 		</Target>
 		<Target Name="Make">
-			<CallTarget Targets="IFSTests:Make;IFSExplorer:Make"/>
+			<CallTarget Targets="IFS:Make;IFSExplorer:Make;IFSTests:Make"/>
 		</Target>
 		<Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 	</Project>
