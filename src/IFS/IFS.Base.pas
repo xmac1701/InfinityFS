@@ -5,7 +5,8 @@ interface
 {$WARN SYMBOL_PLATFORM OFF}
 
 uses
-  Windows, SysUtils, Classes, Generics.Collections;
+  Windows, SysUtils, Classes, Generics.Collections,
+  AsyncCalls;
 
 const
 { File extended attribute constants }
@@ -50,18 +51,26 @@ type
   end;
 
 type
-  TifsStreamBridge = class(TStream)
+  TifsStreamAccessor = class(TStream)
+  private
   protected
-    FStream: TStream;
+    FAccessorStream: TStream;
+    FDecodeCall: IAsyncCall;
+    FEncodeCall: IAsyncCall;
+    FOriginStream: TStream;
+    procedure Decode(dummy: Integer = 0); virtual; abstract;
+    procedure Encode(dummy: Integer = 0); virtual; abstract;
+    procedure Flush; virtual;
   public
-    class constructor Create;
     constructor Create(Source: TStream); virtual;
+    destructor Destroy; override;
     class function ID: UInt8; virtual;
     class function Name: string; virtual;
     function Read(var Buffer; Count: Longint): Longint; override;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; overload; override;
     function Write(const Buffer; Count: Longint): Longint; override;
   end;
-  TifsStreamBridgeClass = class of TifsStreamBridge;
+  TifsStreamAccessorClass = class of TifsStreamAccessor;
 
 type
   TTraversalProc = reference to procedure(FileName: string; Attr: TifsFileAttr);
@@ -73,7 +82,9 @@ type
   /// <summary>
   /// Base class definition of Infinity File System.
   /// </summary>
-  TInfinityFS = class abstract
+  TInfinityFS = class abstract(TObject)
+  strict private
+    class constructor Create;
   private
     FCurFolder: string;
     FOnPassword: TRequirePasswordEvent;
@@ -96,7 +107,6 @@ type
     procedure SetFileAttr(const FileName: string; const Value: TifsFileAttr); virtual; abstract;
     procedure SetStorageAttr(const Value: TifsStorageAttr); virtual; abstract;
   public
-    class constructor Create;
     constructor Create; virtual;
     destructor Destroy; override;
     procedure ChangeFilePassword(const OldPassword, NewPassword: string); virtual;
@@ -132,8 +142,8 @@ type
     procedure CheckPassword;
     procedure SetPassword(const Value: string); inline;
   protected
-    FCompressor: TifsStreamBridge;
-    FEncryptor: TifsStreamBridge;
+    FCompressor: TifsStreamAccessor;
+    FEncryptor: TifsStreamAccessor;
   public
     constructor Create(Owner: TInfinityFS; const FileName: string; const Mode: UInt16 = fmOpenRead);
     destructor Destroy; override;
@@ -143,8 +153,8 @@ type
     property RawStream: TStream read FRawStream;
   end;
 
-procedure RegisterCompressor(Compressor: TifsStreamBridgeClass);
-procedure RegisterEncryptor(Encryptor: TifsStreamBridgeClass);
+procedure RegisterCompressor(Compressor: TifsStreamAccessorClass);
+procedure RegisterEncryptor(Encryptor: TifsStreamAccessorClass);
 
 implementation
 
@@ -153,10 +163,10 @@ uses
 
 {$REGION 'Compressors and Encryptors Manager'}
 var
-  Compressors: array of TifsStreamBridgeClass;
-  Encryptors: array of TifsStreamBridgeClass;
+  Compressors: array of TifsStreamAccessorClass;
+  Encryptors: array of TifsStreamAccessorClass;
 
-procedure RegisterCompressor(Compressor: TifsStreamBridgeClass);
+procedure RegisterCompressor(Compressor: TifsStreamAccessorClass);
 var
   i: Int32;
 begin
@@ -165,7 +175,7 @@ begin
   Compressors[i] := Compressor;
 end;
 
-procedure RegisterEncryptor(Encryptor: TifsStreamBridgeClass);
+procedure RegisterEncryptor(Encryptor: TifsStreamAccessorClass);
 var
   i: Int32;
 begin
@@ -174,21 +184,21 @@ begin
   Encryptors[i] := Encryptor;
 end;
 
-function FindCompressor(ID: Byte): TifsStreamBridgeClass;
+function FindCompressor(ID: Byte): TifsStreamAccessorClass;
 var
   i: Int32;
 begin
   for i := Low(Compressors) to High(Compressors) do
     if Compressors[i].ID = ID then
       Exit(Compressors[i]);
-  //raise EInfinityFS.Create('Invalid compressor id.');
-  Result := TifsStreamBridge;
+  raise EInfinityFS.Create('Invalid compressor id.');
+//  Result := TifsStreamAccessor;
 end;
 
 /// <summary>
 /// Encryptor is still in experimental stage. Not ready for use.
 /// </summary>
-function FindEncryptor(ID: Byte): TifsStreamBridgeClass;
+function FindEncryptor(ID: Byte): TifsStreamAccessorClass;
 var
   i: Int32;
 begin
@@ -196,9 +206,9 @@ begin
   for i := Low(Encryptors) to High(Encryptors) do
     if Encryptors[i].ID = ID then
       Exit(Encryptors[i]);
-//  raise EInfinityFS.Create('Invalid encryptor id.');
 }
-  Result := TifsStreamBridge;
+  raise EInfinityFS.Create('Invalid encryptor id.');
+//  Result := TifsStreamAccessor;
 end;
 {$ENDREGION}
 
@@ -379,38 +389,56 @@ end;
 
 {$ENDREGION}
 
-{$REGION 'TifsTransportStream' }
-class constructor TifsStreamBridge.Create;
+{$REGION 'TifsStreamAccessor' }
+constructor TifsStreamAccessor.Create(Source: TStream);
 begin
-  RegisterCompressor(TifsStreamBridge);
-  RegisterEncryptor(TifsStreamBridge);
+  FOriginStream := Source;
+  FAccessorStream := FOriginStream;
 end;
 
-constructor TifsStreamBridge.Create(Source: TStream);
+destructor TifsStreamAccessor.Destroy;
 begin
-  FStream := Source;
+  FreeAndNil(FAccessorStream);
+
+  inherited;
 end;
 
-class function TifsStreamBridge.ID: UInt8;
+procedure TifsStreamAccessor.Flush;
+begin
+  FEncodeCall := AsyncCall(Encode, 0);
+  FEncodeCall.Sync;
+end;
+
+class function TifsStreamAccessor.ID: UInt8;
 begin
   Result := $00;
 end;
 
-class function TifsStreamBridge.Name: string;
+class function TifsStreamAccessor.Name: string;
 begin
   Result := 'Null';
 end;
 
-function TifsStreamBridge.Read(var Buffer; Count: Longint): Longint;
+function TifsStreamAccessor.Read(var Buffer; Count: Longint): Longint;
 begin
-  Result := FStream.Read(Buffer, Count);
+  repeat until FDecodeCall.Finished;
+
+  Result := FAccessorStream.Read(Buffer, Count);
 end;
 
-function TifsStreamBridge.Write(const Buffer; Count: Longint): Longint;
+function TifsStreamAccessor.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
 begin
-  Result := FStream.Write(Buffer, Count);
+  repeat until FDecodeCall.Finished;
+
+  Result := FAccessorStream.Seek(Offset, Origin);
 end;
 
+function TifsStreamAccessor.Write(const Buffer; Count: Longint): Longint;
+begin
+  repeat until FDecodeCall.Finished;
+
+  Result := FAccessorStream.Write(Buffer, Count);
+end;
 {$ENDREGION}
 
 {$REGION 'TifsFileAttr'}

@@ -9,6 +9,8 @@ uses
 
 type
   TifsGSS = class(TInfinityFS)
+  strict private
+    class constructor Create;
   private
     FStorage: IGpStructuredStorage;
   protected
@@ -22,7 +24,6 @@ type
     procedure SetStorageAttr(const Value: TifsStorageAttr); override;
   public
     constructor Create; override;
-    class constructor Create;
     procedure CloseStorage; override;
     procedure CreateFolder(const NewFolderName: string); override;
     procedure ExportFile(const DataFile, LocalFile: string); override;

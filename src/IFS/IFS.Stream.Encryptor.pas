@@ -11,11 +11,12 @@ const
   AESBufferSize = SizeOf(TAESBuffer);
 
 type
-  TifsAESEncryptor = class(TifsStreamBridge)
+  TifsAESEncryptor = class(TifsStreamAccessor)
+  strict private
+    class constructor Create;
   private
     FKey: string;
   public
-    class constructor Create;
     constructor Create(CompressedStream: TStream; Key: string); reintroduce;
     class function ID: Byte; override;
     class function Name: string; override;
@@ -80,8 +81,8 @@ begin
   try
     // First write the size of total data in byte to make AES.DecryptStream happy.
     tmp.Write(EndCount, SizeOf(EndCount));
-    FStream.Position := StartPos;
-    tmp.CopyFrom(FStream, EndCount);
+    FOriginStream.Position := StartPos;
+    tmp.CopyFrom(FOriginStream, EndCount);
     tmp := AES.DecryptStream(tmp, FKey) as TMemoryStream;
     // OK, we got the decrypted stream. Reset position to offset, so we can ignore the needless data.
     tmp.Position := Offset;
@@ -94,7 +95,7 @@ end;
 
 function TifsAESEncryptor.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
 begin
-  Result := FStream.Seek(Offset, Origin);
+  Result := FOriginStream.Seek(Offset, Origin);
 end;
 
 /// <summary>
@@ -107,7 +108,7 @@ var
   buf: TBytes;
   bufLen: Int64;
 begin
-  OldPos := FStream.Position;
+  OldPos := FOriginStream.Position;
   // Prepare a buffer for decrypted data. We must write Buffer into it, then encrypt it again. And write back to FStream.
   SetLength(buf, Count);
   bufLen := Read(buf, Count);
