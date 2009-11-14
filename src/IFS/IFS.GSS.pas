@@ -8,7 +8,7 @@ uses
   GpStructuredStorage;
 
 type
-  TifsGSS = class(TInfinityFS)
+  TifsGSS = class(TCustomIFS)
   strict private
     class constructor Create;
   private
@@ -40,17 +40,6 @@ implementation
 uses
   RegExpr;
 
-procedure GSS_Global_Init;
-begin
-  with TifsGSS do
-  begin
-    IFS_Reserved_Folders.Add('/$IFS$');
-
-    IFS_Reserved_Files.Add('.ifsStorageAttr');
-    IFS_Reserved_Files.Add('.ifsFileAttr');
-  end;
-end;
-
 function ExecRegExpr(const ARegExpr, AInputStr : RegExprString): boolean;
 var
   r : TRegExpr;
@@ -80,7 +69,8 @@ var
 begin
 // todo: get stg attr.
 //  fs := InternalOpenFile('/$IFS$/StorageAttribute', fmOpenRead);
-//  Result.;
+  Result.Compressor := 0;
+  Result.Encryptor := 0;
 end;
 
 function TifsGSS.GetVersion: UInt32;
@@ -125,6 +115,10 @@ class constructor TifsGSS.Create;
 begin
   inherited;
 
+  IFS_Reserved_Folder_Patterns.Add('/\$IFS\$');         // /$IFS$
+
+  IFS_Reserved_File_Patterns.Add('\.ifsStorageAttr');   // .ifsStorageAttr
+  IFS_Reserved_File_Patterns.Add('\.ifsFileAttr');      // .ifsFileAttr
 end;
 
 procedure TifsGSS.CloseStorage;
@@ -162,7 +156,7 @@ begin
   try
     FStorage.FileNames(Folder, AList);
     for s in AList do
-      if not IFS_Reserved_Files.Contains(s) then    // Do not process reserved files.
+      if not IsReservedFile(s) then    // Do not process reserved files.
         Callback(s, GetFileAttr(s));
   finally
     AList.Free;
@@ -178,7 +172,7 @@ begin
   try
     FStorage.FolderNames(Folder, AList);
     for s in AList do
-      if not IFS_Reserved_Folders.Contains(s) then    // Do not process reserved files.
+      if not IsReservedFolder(s) then    // Do not process reserved files.
         Callback(s, GetFileAttr(s));
   finally
     AList.Free;
@@ -209,9 +203,6 @@ function TifsGSS.IsIFS(Stream: TStream): Boolean;
 begin
   Result := FStorage.IsStructuredStorage(Stream);
 end;
-
-initialization
-  GSS_Global_Init;
 
 end.
 

@@ -47,7 +47,7 @@
 			<DCCReference Include="..\src\IFS\IFS.GSS.pas"/>
 			<DCCReference Include="..\src\IFS\IFS.Stream.Compressor.pas"/>
 			<DCCReference Include="..\src\IFS\IFS.Stream.Encryptor.pas"/>
-			<DCCReference Include="..\src\Tests\IFSTests.Compressor.pas"/>
+			<DCCReference Include="..\src\Tests\IFSTests.Main.pas"/>
 			<BuildConfiguration Include="Base">
 				<Key>Base</Key>
 			</BuildConfiguration>

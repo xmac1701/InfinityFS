@@ -93,8 +93,13 @@ var
 begin
   stg := TifsGSS.Create;
   rex := TRegExpr.Create;
+{
+  IFS_Reserved_Folder_Patterns.Add('/\$IFS\$');         // $IFS$
 
-  if ExecRegExpr('/.*/\.ifsAttr', '/folder1/folder2/.ifsattr') then
+  IFS_Reserved_File_Patterns.Add('/.*/\$IFS\$/\.ifsStorageAttr/.*/');   // .ifsStorageAttr
+  IFS_Reserved_File_Patterns.Add('/.*/\$IFS\$/\.ifsFileAttr/.*/');      // .ifsFileAttr
+}
+  if ExecRegExpr('/\$IFS\$', '/$IFS$') then
     Caption := '1';
 end;
 
