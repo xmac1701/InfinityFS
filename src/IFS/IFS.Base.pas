@@ -13,6 +13,16 @@ const
   faCompressed = $00010000;
   faEncrypted  = $00020000;
 
+  AttributeConsts: array[0..31]of UInt32 =
+  //          0            1          2           3            4          5          6         7
+    (faReadOnly,    faHidden, faSysFile,          0, faDirectory, faArchive, faSymLink, faNormal,
+  //          8
+              0,           0,         0,          0,           0,         0,         0,        0,
+  //         16           17
+   faCompressed, faEncrypted,         0,          0,           0,         0,         0,        0,
+  //         24                                                                               31
+              0,           0,         0,          0,           0,         0,         0,        0);
+
 type
   /// <summary>
   /// Attributes for IFS.
@@ -32,19 +42,22 @@ type
   /// <param name="CreationTime">When we created the file</param>
   /// <param name="LastModifyTime">When we last modified the file</param>
   /// <param name="LastAccessTime">When we last accessed the file</param>
-  /// <param name="IsCompressed">Whether the file was compressed</param>
-  /// <param name="IsEncrypted">Whether the file was encrypted</param>
+  /// <param name="Is*">Test the file dos attribute</param>
+  /// <param name="PassHash">Password hash of the file</param>
   TifsFileAttr = record
     Size: Int64;
     CreationTime: TDateTime;
     LastModifyTime: TDateTime;
     LastAccessTime: TDateTime;
     Attribute: UInt32;
+    PassHash: ShortString;
   private
-    function GetAttrBit(Index: Integer): Boolean;
-    procedure SetAttrBit(Index: Integer; const Value: Boolean);
+    function GetAttrBit(Index: Integer): Boolean; inline;
+    procedure SetAttrBit(Index: Integer; const Value: Boolean); inline;
   public
+    procedure Accessed; inline;
     procedure Init;
+    procedure Modified; inline;
     property IsReadOnly: Boolean index 0 read GetAttrBit write SetAttrBit;
     property IsHidden: Boolean index 1 read GetAttrBit write SetAttrBit;
     property IsSysFile: Boolean index 2 read GetAttrBit write SetAttrBit;
@@ -54,6 +67,8 @@ type
     property IsCompressed: Boolean index 16 read GetAttrBit write SetAttrBit;
     property IsEncrypted: Boolean index 17 read GetAttrBit write SetAttrBit;
   end;
+
+  TifsFolderAttr = TifsFileAttr;
 
 type
   TifsStreamCompressor = class abstract(TObject)
@@ -89,7 +104,7 @@ type
     class constructor Create;
   private
     FAfterOpenStorage: TNotifyEvent;
-    FBeforeClose: TNotifyEvent;
+    FBeforeCloseStorage: TNotifyEvent;
     FCurFolder: string;
     FOnRequirePassword: TRequirePasswordEvent;
     FVersion: UInt32;
@@ -104,18 +119,20 @@ type
     procedure CheckCompressor;
     procedure CheckEncryptor;
     procedure DoAfterOpenStorage; virtual;
-    procedure DoBeforeClose; virtual;
+    procedure DoBeforeCloseStorage; virtual;
     procedure DoRequirePassword(const FileName: string; var Password: string);
-    function GetFileAttr(const FileName: string): TifsFileAttr; virtual; abstract;
+    function GetActive: Boolean; virtual; abstract;
+    function GetFileAttr(FileName: string): TifsFileAttr; virtual; abstract;
+    function GetFolderAttr(FolderName: string): TifsFolderAttr; virtual; abstract;
     procedure GetStorageAttr; virtual; abstract;
     function GetVersion: UInt32; virtual; abstract;
-    function InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream; virtual; abstract;
-    procedure InternalOpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead); overload; virtual; abstract;
+    procedure InternalCreateFolder(const NewFolderName: string); virtual; abstract;
+    function InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenReadWrite): TStream; virtual; abstract;
+    procedure InternalOpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenReadWrite); overload; virtual; abstract;
     procedure InternalOpenStorage(Stream: TStream); overload; virtual; abstract;
-    function IsReservedFile(const FileName: string): Boolean;
-    function IsReservedFolder(const FolderName: string): Boolean;
     procedure SetCurFolder(const Value: string); virtual;
-    procedure SetFileAttr(const FileName: string; const Value: TifsFileAttr); virtual; abstract;
+    procedure SetFileAttr(FileName: string; const Value: TifsFileAttr); virtual; abstract;
+    procedure SetFolderAttr(FolderName: string; const Value: TifsFolderAttr); virtual; abstract;
     procedure SetStorageAttr(const Value: TifsStorageAttr); virtual; abstract;
   public
     constructor Create; virtual;
@@ -123,24 +140,31 @@ type
     procedure AfterConstruction; override;
     procedure ChangeFilePassword(const OldPassword, NewPassword: string); virtual;
     procedure CloseStorage; virtual;
-    procedure CreateFolder(const NewFolderName: string); virtual; abstract;
+    procedure CreateFolder(const NewFolderName: string); virtual;
+    function EnsurePathWithDelim(Source: string): string; inline;
     procedure ExportFile(const SrcFile, DstFile: string); virtual;
-    procedure FileTraversal(const Folder: string; Callback: TTraversalProc); virtual; abstract;
-    procedure FolderTraversal(const Folder: string; Callback: TTraversalProc); virtual; abstract;
+    procedure FileTraversal(const Folder: string; Callback: TTraversalProc; IncludeSystemFiles: Boolean = False); virtual;
+        abstract;
+    procedure FolderTraversal(const Folder: string; Callback: TTraversalProc; IncludeSystemFolders: Boolean = False);
+        virtual; abstract;
     function GetFullName(const AName: string): string;
     procedure ImportFile(const SrcFile, DstFile: string); virtual;
     function IsIFS(const StorageFile: string): Boolean; overload; virtual; abstract;
     function IsIFS(Stream: TStream): Boolean; overload; virtual; abstract;
-    function OpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream; virtual;
-    procedure OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead); overload; virtual;
+    function IsReservedFile(const FileName: string): Boolean;
+    function IsReservedFolder(const FolderName: string): Boolean;
+    function OpenFile(const FileName: string; Mode: UInt16 = fmOpenReadWrite): TStream; virtual;
+    procedure OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenReadWrite); overload; virtual;
     procedure OpenStorage(Stream: TStream); overload; virtual;
+    property Active: Boolean read GetActive;
     property CurFolder: string read FCurFolder write SetCurFolder;
-    property FileAttr[const FileName: string]: TifsFileAttr read GetFileAttr write SetFileAttr;
+    property FileAttr[FileName: string]: TifsFileAttr read GetFileAttr write SetFileAttr;
+    property FolderAttr[FolderName: string]: TifsFolderAttr read GetFolderAttr write SetFolderAttr;
     property PathDelim: Char read FPathDelim;
     property StorageAttr: TifsStorageAttr read FStorageAttr write SetStorageAttr;
     property Version: UInt32 read GetVersion;
     property AfterOpenStorage: TNotifyEvent read FAfterOpenStorage write FAfterOpenStorage;
-    property BeforeClose: TNotifyEvent read FBeforeClose write FBeforeClose;
+    property BeforeCloseStorage: TNotifyEvent read FBeforeCloseStorage write FBeforeCloseStorage;
     property OnRequirePassword: TRequirePasswordEvent read FOnRequirePassword write FOnRequirePassword;
   end;
 
@@ -166,7 +190,9 @@ type
     destructor Destroy; override;
     function Read(var Buffer; Count: Longint): Longint; override;
     function Seek(Offset: Longint; Origin: Word): Longint; override;
+    procedure UpdateAttribute; virtual;
     function Write(const Buffer; Count: Longint): Longint; override;
+    property Attr: TifsFileAttr read FAttr write FAttr;
     property Password: string read FPassword write SetPassword;
     property RawStream: TStream read FRawStream;
   end;
@@ -282,7 +308,21 @@ end;
 
 procedure TCustomIFS.CloseStorage;
 begin
-  DoBeforeClose;
+  DoBeforeCloseStorage;
+end;
+
+procedure TCustomIFS.CreateFolder(const NewFolderName: string);
+var
+  s: string;
+begin
+  s := GetFullName(NewFolderName);
+  InternalCreateFolder(s);
+  with OpenFile(s+'/.ifsFolderAttr', fmCreate) as TifsFileStream do
+  begin
+    Attr.IsHidden := True;
+    UpdateAttribute;
+    Free;
+  end;
 end;
 
 procedure TCustomIFS.DoAfterOpenStorage;
@@ -294,9 +334,9 @@ begin
   if Assigned(FAfterOpenStorage) then FAfterOpenStorage(Self);
 end;
 
-procedure TCustomIFS.DoBeforeClose;
+procedure TCustomIFS.DoBeforeCloseStorage;
 begin
-  if Assigned(FBeforeClose) then FBeforeClose(Self);
+  if Assigned(FBeforeCloseStorage) then FBeforeCloseStorage(Self);
 end;
 
 procedure TCustomIFS.DoRequirePassword(const FileName: string; var Password: string);
@@ -305,13 +345,20 @@ begin
     FOnRequirePassword(FileName, Password);
 end;
 
+function TCustomIFS.EnsurePathWithDelim(Source: string): string;
+begin
+  Result := Source;
+  if Result[Length(Result)] <> Self.PathDelim then
+    Result := Result + Self.PathDelim;
+end;
+
 procedure TCustomIFS.ExportFile(const SrcFile, DstFile: string);
 var
   src: TStream;
   dst: TFileStream;
 begin
-  src := InternalOpenFile(DstFile, fmOpenRead);
-  dst := TFileStream.Create(SrcFile, fmCreate);
+  src := InternalOpenFile(SrcFile, fmOpenRead);
+  dst := TFileStream.Create(DstFile, fmCreate);
   try
     dst.CopyFrom(src, 0);
   finally
@@ -370,8 +417,8 @@ begin
     begin
       r.Expression := s;
       Result := r.Exec(FileName);
-      if Result then
-        raise EInfinityFS.Create('File is reserved');
+//      if Result then
+//        raise EInfinityFS.Create('File is reserved');
     end;
   finally
     r.Free;
@@ -393,26 +440,20 @@ begin
     begin
       r.Expression := s;
       Result := r.Exec(FolderName);
-      if Result then
-        raise EInfinityFS.Create('Folder is reserved');
+//      if Result then
+//        raise EInfinityFS.Create('Folder is reserved');
     end;
   finally
     r.Free;
   end;
 end;
 
-function TCustomIFS.OpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream;
-var
-  fn: string;
+function TCustomIFS.OpenFile(const FileName: string; Mode: UInt16 = fmOpenReadWrite): TStream;
 begin
-  fn := GetFullName(FileName);
-  if IsReservedFile(fn) then
-    raise EInfinityFS.Create('You cannot open a reserved file, or files in reserved folders.');
-
-  Result := TifsFileStream.Create(Self, fn, Mode);
+  Result := TifsFileStream.Create(Self, GetFullName(FileName), Mode);
 end;
 
-procedure TCustomIFS.OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead);
+procedure TCustomIFS.OpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenReadWrite);
 begin
   InternalOpenStorage(StorageFile, Mode);
   DoAfterOpenStorage;
@@ -433,14 +474,15 @@ end;
 {$REGION 'TifsFileStream' }
 constructor TifsFileStream.Create(Owner: TCustomIFS; const FileName: string; const Mode: UInt16 = fmOpenRead);
 begin
-  inherited Create;
-
   FOwner := Owner;
   FFileName := FileName;
   FMode := Mode;
 
-  FRawStream := Owner.InternalOpenFile(FFileName, FMode);
-  FAttr := FOwner.GetFileAttr(FFileName);
+  FRawStream := FOwner.InternalOpenFile(FFileName, FMode);
+  if FMode = fmCreate then
+    FAttr.Init
+  else
+    FAttr := FOwner.GetFileAttr(FFileName);
 
   CheckPassword;
   FDecodeCall := AsyncCall(Decode, 0);
@@ -449,6 +491,7 @@ end;
 destructor TifsFileStream.Destroy;
 begin
   Flush;
+  UpdateAttribute;
 
   inherited;
 end;
@@ -519,6 +562,7 @@ function TifsFileStream.Read(var Buffer; Count: Longint): Longint;
 begin
   repeat until FDecodeCall.Finished;
   Result := inherited;
+  FAttr.Accessed;
 end;
 
 function TifsFileStream.Seek(Offset: Longint; Origin: Word): Longint;
@@ -531,43 +575,56 @@ procedure TifsFileStream.SetPassword(const Value: string);
 begin
   if FDecodeCall.Finished and ((FEncodeCall = nil) or FEncodeCall.Finished) then
     FPassword := Value;
+  //todo: if value='' then remove encryption
+  //todo: else set encrypted attribute
+end;
+
+procedure TifsFileStream.UpdateAttribute;
+begin
+  FOwner.SetFileAttr(FFileName, FAttr);
 end;
 
 function TifsFileStream.Write(const Buffer; Count: Longint): Longint;
 begin
   repeat until FDecodeCall.Finished;
   Result := inherited;
+  FAttr.Modified;
 end;
 {$ENDREGION 'TifsFileStream'}
 
 {$REGION 'TifsFileAttr'}
-const
-  AttrConsts: array[0..31]of UInt32 =
-  //          0            1          2           3            4          5          6         7
-    (faReadOnly,    faHidden, faSysFile,          0, faDirectory, faArchive, faSymLink, faNormal,
-  //          8
-              0,           0,         0,          0,           0,         0,         0,        0,
-  //         16           17
-   faCompressed, faEncrypted,         0,          0,           0,         0,         0,        0,
-  //         24                                                                               31
-              0,           0,         0,          0,           0,         0,         0,        0);
+
+procedure TifsFileAttr.Accessed;
+begin
+  LastAccessTime := Now;
+end;
 
 procedure TifsFileAttr.Init;
 begin
-  FillChar(Self, SizeOf(TifsFileAttr), 0);
+  Size := 0;
+  CreationTime := Now;
+  LastModifyTime := CreationTime;
+  LastAccessTime := CreationTime;
+  Attribute := faArchive;
+  PassHash := '';
 end;
 
 function TifsFileAttr.GetAttrBit(Index: Integer): Boolean;
 begin
-  Result := (Attribute and AttrConsts[Index]) <> 0;
+  Result := (Attribute and AttributeConsts[Index]) <> 0;
+end;
+
+procedure TifsFileAttr.Modified;
+begin
+  LastModifyTime := Now;
 end;
 
 procedure TifsFileAttr.SetAttrBit(Index: Integer; const Value: Boolean);
 begin
   if Value then
-    Attribute := Attribute or AttrConsts[Index]
+    Attribute := Attribute or AttributeConsts[Index]
   else
-    Attribute := Attribute xor AttrConsts[Index];
+    Attribute := Attribute xor AttributeConsts[Index];
 end;
 {$ENDREGION 'TifsFileAttr'}
 

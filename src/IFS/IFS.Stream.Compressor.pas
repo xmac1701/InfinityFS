@@ -122,5 +122,7 @@ begin
   Result := 'ZLib';
 end;
 
+initialization
+
 end.
 

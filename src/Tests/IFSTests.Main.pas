@@ -9,15 +9,11 @@ uses
 type
   TTestReservedFilesAndFolders = class(TTestCase)
   published
+    procedure TestOther;
     procedure TestFileInRezFolder;
     procedure TestFileNameRez;
     procedure TestFolderInRezFolder;
     procedure TestFolderNameRez;
-  end;
-
-  TTestFileAttr = class(TTestCase)
-  published
-    procedure TestAttr;
   end;
 
 implementation
@@ -53,22 +49,13 @@ end;
 procedure TTestReservedFilesAndFolders.TestFolderNameRez;
 begin
   CheckTrue(ExecRegExpr('/\$IFS\$', '/abc/$IFS$/123'));
+  CheckTrue(ExecRegExpr('.*\$IFS\$', '$IFS$'));
 
 end;
 
-{ TTestFileAttr }
-
-procedure TTestFileAttr.TestAttr;
-var
-  attr: TifsFileAttr;
+procedure TTestReservedFilesAndFolders.TestOther;
 begin
-  CheckEquals(0, SizeOf(TifsFileAttr));
-  attr.Init;
-  CheckEquals(0, attr.Attribute);
-  attr.IsArchive := True;
-  attr.IsCompressed := True;
-  attr.IsHidden := True;
-  CheckEquals($10022, attr.Attribute);
+  CheckEquals('/', IncludeTrailingPathDelimiter('/'));
 end;
 
 end.

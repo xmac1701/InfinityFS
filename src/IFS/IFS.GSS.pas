@@ -16,20 +16,24 @@ type
   private
     FStorage: IGpStructuredStorage;
   protected
-    function GetFileAttr(const FileName: string): TifsFileAttr; override;
+    function GetActive: Boolean; override;
+    function GetFileAttr(FileName: string): TifsFileAttr; override;
+    function GetFolderAttr(FolderName: string): TifsFolderAttr; override;
     procedure GetStorageAttr; override;
     function GetVersion: UInt32; override;
-    function InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream; override;
-    procedure InternalOpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead); overload; override;
+    procedure InternalCreateFolder(const NewFolderName: string); override;
+    function InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenReadWrite): TStream; override;
+    procedure InternalOpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenReadWrite); overload; override;
     procedure InternalOpenStorage(Stream: TStream); overload; override;
-    procedure SetFileAttr(const FileName: string; const Value: TifsFileAttr); override;
+    procedure SetFileAttr(FileName: string; const Value: TifsFileAttr); override;
+    procedure SetFolderAttr(FolderName: string; const Value: TifsFolderAttr); override;
     procedure SetStorageAttr(const Value: TifsStorageAttr); override;
   public
     constructor Create; override;
     procedure CloseStorage; override;
-    procedure CreateFolder(const NewFolderName: string); override;
-    procedure FileTraversal(const Folder: string; Callback: TTraversalProc); override;
-    procedure FolderTraversal(const Folder: string; Callback: TTraversalProc); override;
+    procedure FileTraversal(const Folder: string; Callback: TTraversalProc; IncludeSystemFiles: Boolean = False); override;
+    procedure FolderTraversal(const Folder: string; Callback: TTraversalProc; IncludeSystemFolders: Boolean = False);
+        override;
     function IsIFS(const StorageFile: string): Boolean; overload; override;
     function IsIFS(Stream: TStream): Boolean; overload; override;
     property Intf: IGpStructuredStorage read FStorage;
@@ -54,18 +58,21 @@ begin
   end;
 end;
 
-class constructor TifsGSS.Create;
+constructor TifsGSS.Create;
 begin
   inherited;
+  FStorage := GpStructuredStorage.CreateStructuredStorage;
+end;
 
-  IFS_Reserved_Folder_Patterns.Add('/\$IFS\$');         // /$IFS$
-
+function TifsGSS.GetActive: Boolean;
+begin
+  Result := (FStorage <> nil) and (FStorage.DataSize > 0);
 end;
 
 /// <remarks>
 /// FileName must be a full name(file or folder)
 /// </remarks>
-function TifsGSS.GetFileAttr(const FileName: string): TifsFileAttr;
+function TifsGSS.GetFileAttr(FileName: string): TifsFileAttr;
 var
   fi: IGpStructuredFileInfo;
 begin
@@ -85,13 +92,18 @@ begin
   end;
 end;
 
+function TifsGSS.GetFolderAttr(FolderName: string): TifsFolderAttr;
+begin
+  Result := GetFileAttr(FolderName+'/.ifsFolderAttr');
+end;
+
 procedure TifsGSS.GetStorageAttr;
 var
   fi: IGpStructuredFileInfo;
 begin
   fi := FStorage.FileInfo['/'];
   try
-    FStorageAttr.Compressor := Byte(fi.Attribute['Compressor'][1]);
+    FStorageAttr.Compressor := Byte('Z'){Byte(fi.Attribute['Compressor'][1])};
     FStorageAttr.Encryptor := 0{Byte(fi.Attribute['Encryptor'][1])};
   finally
     fi := nil;
@@ -103,12 +115,12 @@ begin
   Result := $02000000;    // 2.0.0.0  Same to GSS version
 end;
 
-function TifsGSS.InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream;
+function TifsGSS.InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenReadWrite): TStream;
 begin
   Result := FStorage.OpenFile(GetFullName(FileName), Mode);
 end;
 
-procedure TifsGSS.InternalOpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead);
+procedure TifsGSS.InternalOpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenReadWrite);
 var
   stgattr: TifsStorageAttr;
 begin
@@ -131,7 +143,7 @@ begin
   CurFolder := '/';
 end;
 
-procedure TifsGSS.SetFileAttr(const FileName: string; const Value: TifsFileAttr);
+procedure TifsGSS.SetFileAttr(FileName: string; const Value: TifsFileAttr);
 var
   fi: IGpStructuredFileInfo;
 begin
@@ -144,6 +156,11 @@ begin
   finally
     fi := nil;
   end;
+end;
+
+procedure TifsGSS.SetFolderAttr(FolderName: string; const Value: TifsFolderAttr);
+begin
+  SetFileAttr(FolderName+'/.ifsFolderAttr', Value);
 end;
 
 procedure TifsGSS.SetStorageAttr(const Value: TifsStorageAttr);
@@ -159,10 +176,12 @@ begin
   end;
 end;
 
-constructor TifsGSS.Create;
+class constructor TifsGSS.Create;
 begin
   inherited;
-  FStorage := GpStructuredStorage.CreateStructuredStorage;
+
+  IFS_Reserved_Folder_Patterns.Add('\$IFS\$');         // /$IFS$
+
 end;
 
 procedure TifsGSS.CloseStorage;
@@ -172,12 +191,12 @@ begin
   FStorage := GpStructuredStorage.CreateStructuredStorage;
 end;
 
-procedure TifsGSS.CreateFolder(const NewFolderName: string);
+procedure TifsGSS.InternalCreateFolder(const NewFolderName: string);
 begin
-  FStorage.CreateFolder(GetFullName(NewFolderName));
+  FStorage.CreateFolder(NewFolderName);
 end;
 
-procedure TifsGSS.FileTraversal(const Folder: string; Callback: TTraversalProc);
+procedure TifsGSS.FileTraversal(const Folder: string; Callback: TTraversalProc; IncludeSystemFiles: Boolean = False);
 var
   AList: TStringList;
   s: string;
@@ -186,15 +205,17 @@ begin
   AList := TStringList.Create;
   try
     FStorage.FileNames(Folder, AList);
-    for s in AList do
-      if not IsReservedFile(s) then    // Do not process reserved files.
-        Callback(s, GetFileAttr(s));
+    if AList.Count > 0 then
+      for s in AList do
+        if not IsReservedFile(s) or IncludeSystemFiles then    // Shall we process reserved files?
+          Callback(s, GetFileAttr(EnsurePathWithDelim(Folder) + s));
   finally
     AList.Free;
   end;  // try
 end;
 
-procedure TifsGSS.FolderTraversal(const Folder: string; Callback: TTraversalProc);
+procedure TifsGSS.FolderTraversal(const Folder: string; Callback: TTraversalProc; IncludeSystemFolders: Boolean =
+    False);
 var
   AList: TStringList;
   s: string;
@@ -203,9 +224,10 @@ begin
   AList := TStringList.Create;
   try
     FStorage.FolderNames(Folder, AList);
-    for s in AList do
-      if not IsReservedFolder(s) then    // Do not process reserved files.
-        Callback(s, GetFileAttr(Folder + '/' + s));
+    if AList.Count > 0 then
+      for s in AList do
+        if not IsReservedFolder(s) or IncludeSystemFolders then    // Shall we process reserved folders?
+          Callback(s, GetFileAttr(EnsurePathWithDelim(Folder) + s));
   finally
     AList.Free;
   end;  // try

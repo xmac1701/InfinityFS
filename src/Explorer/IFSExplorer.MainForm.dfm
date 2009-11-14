@@ -39,7 +39,8 @@ object fmIFSEMain: TfmIFSEMain
     ToolbarControls = (
       RzToolButton1
       RzToolButton3
-      RzToolButton2)
+      RzToolButton2
+      RzToolButton4)
     object RzToolButton1: TRzToolButton
       Left = 4
       Top = 2
@@ -57,6 +58,12 @@ object fmIFSEMain: TfmIFSEMain
       Top = 2
       Caption = 'Close'
       OnClick = RzToolButton3Click
+    end
+    object RzToolButton4: TRzToolButton
+      Left = 184
+      Top = 2
+      Caption = 'Create'
+      OnClick = RzToolButton4Click
     end
   end
   object lvFile: TListView
@@ -125,7 +132,7 @@ object fmIFSEMain: TfmIFSEMain
     Left = 80
     Top = 96
     Bitmap = {
-      494C010102006C00940010001000FFFFFFFF2110FFFFFFFFFFFFFFFF424D3600
+      494C010102006C00A80010001000FFFFFFFF2110FFFFFFFFFFFFFFFF424D3600
       0000000000003600000028000000400000001000000001002000000000000010
       0000000000000000000000000000000000000000000000000000000000000000
       000000000000999897FF999897FF999897FF1A1A1A7002020220000000000000
@@ -277,7 +284,6 @@ object fmIFSEMain: TfmIFSEMain
     end
     object GetAttrs1: TMenuItem
       Caption = 'Get Attrs'
-      OnClick = GetAttrs1Click
     end
   end
   object dlgSave: TSaveDialog

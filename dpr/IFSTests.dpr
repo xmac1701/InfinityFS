@@ -29,8 +29,8 @@ uses
 
 procedure RegTests();
 begin
-//  RegisterTests('Reserved Files and Folders', [TTestReservedFilesAndFolders.Suite]);
-  RegisterTests('TifsFileAttr', [TTestFileAttr.Suite]);
+  RegisterTests('Reserved Files and Folders', [TTestReservedFilesAndFolders.Suite]);
+//  RegisterTests('TifsFileAttr', [TTestFileAttr.Suite]);
 end;
 
 begin

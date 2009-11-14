@@ -24,13 +24,14 @@ type
     GetAttrs1: TMenuItem;
     Panel1: TPanel;
     cboAddress: TComboBox;
+    RzToolButton4: TRzToolButton;
     procedure AddFile1Click(Sender: TObject);
     procedure ExportFile1Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
-    procedure GetAttrs1Click(Sender: TObject);
     procedure RzToolButton1Click(Sender: TObject);
     procedure RzToolButton2Click(Sender: TObject);
     procedure RzToolButton3Click(Sender: TObject);
+    procedure RzToolButton4Click(Sender: TObject);
     procedure tvFolderChange(Sender: TObject; Node: TTreeNode);
     procedure tvFolderDeletion(Sender: TObject; Node: TTreeNode);
     procedure tvFolderExpanding(Sender: TObject; Node: TTreeNode; var AllowExpansion: Boolean);
@@ -55,8 +56,10 @@ implementation
 {$R *.dfm}
 
 uses
-  GpStructuredStorage, RegExpr,
-  IFS.Base, IFS.GSS, IFSExplorer.Global;
+  Spring.System,
+  RegExpr,
+  IFS.Base, IFS.GSS, IFS.Stream.Compressor,
+  IFSExplorer.Global;
 
 
 var
@@ -104,20 +107,6 @@ begin
 //    Caption := '1';
 end;
 
-procedure TfmIFSEMain.GetAttrs1Click(Sender: TObject);
-var
-  fi: IGpStructuredFileInfo;
-  attrs: TStringList;
-  s: string;
-begin
-  fi := stg.Intf.FileInfo[stg.CurFolder+lvfile.Selected.Caption];
-  attrs := TStringList.Create;
-  fi.AttributeNames(attrs);
-  Log(IntToStr(attrs.Count));
-  for s in attrs do
-    Log(s+#9+fi.Attribute[s]);
-end;
-
 procedure TfmIFSEMain.IFSRequirePassword(FileName: string; var Password: string);
 begin
   Password := InputBox('Password required for the file:', FileName, '');
@@ -161,6 +150,7 @@ end;
 
 procedure TfmIFSEMain.RzToolButton1Click(Sender: TObject);
 begin
+{
   if dlgOpen.Execute then
   begin
     if FileExists(dlgOpen.FileName) then
@@ -179,6 +169,10 @@ begin
     InitFolderTree;
     LoadFolder(tvFolder.Items[0], '/');
   end;
+}
+  stg.OpenStorage(ApplicationPath + 'Test.ifs');
+  InitFolderTree;
+  LoadFolder(tvFolder.Items[0], '/');
 end;
 
 procedure TfmIFSEMain.RzToolButton2Click(Sender: TObject);
@@ -194,6 +188,14 @@ end;
 
 procedure TfmIFSEMain.RzToolButton3Click(Sender: TObject);
 begin
+  stg.CloseStorage;
+  tvFolder.Items.Clear;
+  lvFile.Items.Clear;
+end;
+
+procedure TfmIFSEMain.RzToolButton4Click(Sender: TObject);
+begin
+  stg.OpenStorage(ApplicationPath + 'Test.ifs', fmCreate);
   stg.CloseStorage;
 end;
 
