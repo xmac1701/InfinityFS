@@ -4,7 +4,7 @@ interface
 
 uses
   SysUtils, Classes, TestFramework,
-  IFS.Base, IFS.Stream.Compressor;
+  IFS.Base;
 
 type
   TTestReservedFilesAndFolders = class(TTestCase)
@@ -13,6 +13,11 @@ type
     procedure TestFileNameRez;
     procedure TestFolderInRezFolder;
     procedure TestFolderNameRez;
+  end;
+
+  TTestFileAttr = class(TTestCase)
+  published
+    procedure TestAttr;
   end;
 
 implementation
@@ -49,6 +54,21 @@ procedure TTestReservedFilesAndFolders.TestFolderNameRez;
 begin
   CheckTrue(ExecRegExpr('/\$IFS\$', '/abc/$IFS$/123'));
 
+end;
+
+{ TTestFileAttr }
+
+procedure TTestFileAttr.TestAttr;
+var
+  attr: TifsFileAttr;
+begin
+  CheckEquals(0, SizeOf(TifsFileAttr));
+  attr.Init;
+  CheckEquals(0, attr.Attribute);
+  attr.IsArchive := True;
+  attr.IsCompressed := True;
+  attr.IsHidden := True;
+  CheckEquals($10022, attr.Attribute);
 end;
 
 end.

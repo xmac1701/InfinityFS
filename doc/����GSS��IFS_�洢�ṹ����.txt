@@ -1,0 +1,18 @@
+1. 特殊目录
+/$IFS$	保存当前FS直接相关的数据。
+
+2. 特殊文件
+
+3. 附加属性
+(1) 通用属性 (TifsFileAttr)
+CreationTime		TDateTime		文件创建时间
+LastModifyTime		TDateTime		最后修改时间
+LastAccessTime		TDateTime		最后访问时间
+Attribute			UInt32			DOS属性
+
+(2) 根目录属性
+Compressor			Byte			文件所用的压缩器代码
+Encryptor			Byte			文件所用的加密器代码
+
+(3) 其他属性
+Passhash			ShortString		密码哈希值（文件/目录）

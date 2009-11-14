@@ -39,6 +39,7 @@ type
     function PathFromNode(Node: TTreeNode): string;
   public
     procedure AddFolderNode(ParentNode: TTreeNode; const Folder: string);
+    procedure IFSRequirePassword(FileName: string; var Password: string);
   // defaul for InvertCase property
 
     procedure InitFolderTree;
@@ -99,8 +100,8 @@ begin
   IFS_Reserved_File_Patterns.Add('/.*/\$IFS\$/\.ifsStorageAttr/.*/');   // .ifsStorageAttr
   IFS_Reserved_File_Patterns.Add('/.*/\$IFS\$/\.ifsFileAttr/.*/');      // .ifsFileAttr
 }
-  if ExecRegExpr('/\$IFS\$', '/$IFS$') then
-    Caption := '1';
+//  if ExecRegExpr('/\$IFS\$', '/$IFS$') then
+//    Caption := '1';
 end;
 
 procedure TfmIFSEMain.GetAttrs1Click(Sender: TObject);
@@ -115,6 +116,11 @@ begin
   Log(IntToStr(attrs.Count));
   for s in attrs do
     Log(s+#9+fi.Attribute[s]);
+end;
+
+procedure TfmIFSEMain.IFSRequirePassword(FileName: string; var Password: string);
+begin
+  Password := InputBox('Password required for the file:', FileName, '');
 end;
 
 procedure TfmIFSEMain.InitFolderTree;
@@ -157,12 +163,20 @@ procedure TfmIFSEMain.RzToolButton1Click(Sender: TObject);
 begin
   if dlgOpen.Execute then
   begin
-    InitFolderTree;
-    stg.CloseStorage;
-    if not FileExists(dlgOpen.FileName) then
-      stg.OpenStorage(dlgOpen.FileName, fmCreate)
+    if FileExists(dlgOpen.FileName) then
+    begin
+      if stg.IsIFS(dlgOpen.FileName) then
+      begin
+        stg.CloseStorage;
+        stg.OpenStorage(dlgOpen.FileName, fmOpenReadWrite);
+      end
+      else
+        raise Exception.Create('Not a valid InfinityFS storage.');
+    end
     else
-      stg.OpenStorage(dlgOpen.FileName, fmOpenReadWrite);
+      stg.OpenStorage(dlgOpen.FileName, fmCreate);
+
+    InitFolderTree;
     LoadFolder(tvFolder.Items[0], '/');
   end;
 end;

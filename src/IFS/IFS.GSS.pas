@@ -2,6 +2,8 @@ unit IFS.GSS;
 
 interface
 
+{$WARN SYMBOL_PLATFORM OFF}
+
 uses
   Windows, SysUtils, Classes, Generics.Collections,
   IFS.Base, IOUtils,
@@ -15,7 +17,7 @@ type
     FStorage: IGpStructuredStorage;
   protected
     function GetFileAttr(const FileName: string): TifsFileAttr; override;
-    function GetStorageAttr: TifsStorageAttr; override;
+    procedure GetStorageAttr; override;
     function GetVersion: UInt32; override;
     function InternalOpenFile(const FileName: string; Mode: UInt16 = fmOpenRead): TStream; override;
     procedure InternalOpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead); overload; override;
@@ -26,10 +28,8 @@ type
     constructor Create; override;
     procedure CloseStorage; override;
     procedure CreateFolder(const NewFolderName: string); override;
-    procedure ExportFile(const DataFile, LocalFile: string); override;
     procedure FileTraversal(const Folder: string; Callback: TTraversalProc); override;
     procedure FolderTraversal(const Folder: string; Callback: TTraversalProc); override;
-    procedure ImportFile(const LocalFile, DataFile: string); override;
     function IsIFS(const StorageFile: string): Boolean; overload; override;
     function IsIFS(Stream: TStream): Boolean; overload; override;
     property Intf: IGpStructuredStorage read FStorage;
@@ -54,23 +54,48 @@ begin
   end;
 end;
 
+class constructor TifsGSS.Create;
+begin
+  inherited;
+
+  IFS_Reserved_Folder_Patterns.Add('/\$IFS\$');         // /$IFS$
+
+end;
+
+/// <remarks>
+/// FileName must be a full name(file or folder)
+/// </remarks>
 function TifsGSS.GetFileAttr(const FileName: string): TifsFileAttr;
 var
   fi: IGpStructuredFileInfo;
 begin
+  Result.Init;
+  if FStorage.FolderExists(FileName) then
+    Result.IsDirectory := True;
+
   fi := FStorage.FileInfo[FileName];
-  Result.Size := fi.Size;
-  Result.Attribute := faArchive;
+  try
+    Result.Size := fi.Size;
+    Result.CreationTime := StrToFloatDef(fi.Attribute['CreationTime'], 0);
+    Result.LastModifyTime := StrToFloatDef(fi.Attribute['LastModifyTime'], 0);
+    Result.LastAccessTime := StrToFloatDef(fi.Attribute['LastAccessTime'], 0);
+    Result.Attribute := StrToIntDef(fi.Attribute['Attribute'], faArchive);
+  finally
+    fi := nil;
+  end;
 end;
 
-function TifsGSS.GetStorageAttr: TifsStorageAttr;
+procedure TifsGSS.GetStorageAttr;
 var
-  fs: TStream;
+  fi: IGpStructuredFileInfo;
 begin
-// todo: get stg attr.
-//  fs := InternalOpenFile('/$IFS$/StorageAttribute', fmOpenRead);
-  Result.Compressor := 0;
-  Result.Encryptor := 0;
+  fi := FStorage.FileInfo['/'];
+  try
+    FStorageAttr.Compressor := Byte(fi.Attribute['Compressor'][1]);
+    FStorageAttr.Encryptor := 0{Byte(fi.Attribute['Encryptor'][1])};
+  finally
+    fi := nil;
+  end;
 end;
 
 function TifsGSS.GetVersion: UInt32;
@@ -84,8 +109,19 @@ begin
 end;
 
 procedure TifsGSS.InternalOpenStorage(const StorageFile: string; Mode: UInt16 = fmOpenRead);
+var
+  stgattr: TifsStorageAttr;
 begin
   FStorage.Initialize(StorageFile, Mode);
+  if Mode = fmCreate then
+  begin
+    //todo: set init storage attr.
+    stgattr.Compressor := 0;
+    stgattr.Encryptor := 0;
+    SetStorageAttr(stgattr);
+    FStorage.CreateFolder('/$IFS$');
+  end;
+
   CurFolder := '/';
 end;
 
@@ -96,13 +132,31 @@ begin
 end;
 
 procedure TifsGSS.SetFileAttr(const FileName: string; const Value: TifsFileAttr);
+var
+  fi: IGpStructuredFileInfo;
 begin
-  inherited;
+  fi := FStorage.FileInfo[FileName];
+  try
+    fi.Attribute['CreationTime'] := FloatToStr(Value.CreationTime);
+    fi.Attribute['LastModifyTime'] := FloatToStr(Value.LastModifyTime);
+    fi.Attribute['LastAccessTime'] := FloatToStr(Value.LastAccessTime);
+    fi.Attribute['Attribute'] := IntToStr(Value.Attribute);
+  finally
+    fi := nil;
+  end;
 end;
 
 procedure TifsGSS.SetStorageAttr(const Value: TifsStorageAttr);
+var
+  fi: IGpStructuredFileInfo;
 begin
-  inherited;
+  fi := FStorage.FileInfo['/'];
+  try
+    fi.Attribute['Compressor'] := AnsiChar(Value.Compressor);
+//    fi.Attribute['Encryptor'] := AnsiChar(Value.Encryptor);
+  finally
+    fi := nil;
+  end;
 end;
 
 constructor TifsGSS.Create;
@@ -111,18 +165,9 @@ begin
   FStorage := GpStructuredStorage.CreateStructuredStorage;
 end;
 
-class constructor TifsGSS.Create;
-begin
-  inherited;
-
-  IFS_Reserved_Folder_Patterns.Add('/\$IFS\$');         // /$IFS$
-
-  IFS_Reserved_File_Patterns.Add('\.ifsStorageAttr');   // .ifsStorageAttr
-  IFS_Reserved_File_Patterns.Add('\.ifsFileAttr');      // .ifsFileAttr
-end;
-
 procedure TifsGSS.CloseStorage;
 begin
+  inherited;
   FStorage := nil;
   FStorage := GpStructuredStorage.CreateStructuredStorage;
 end;
@@ -132,26 +177,12 @@ begin
   FStorage.CreateFolder(GetFullName(NewFolderName));
 end;
 
-procedure TifsGSS.ExportFile(const DataFile, LocalFile: string);
-var
-  stmRead: TStream;
-  stmWrite: TFileStream;
-begin
-  stmRead := FStorage.OpenFile(GetFullName(DataFile), fmOpenRead);
-  stmWrite := TFileStream.Create(LocalFile, fmCreate);
-  try
-    stmWrite.CopyFrom(stmRead, 0); //todo:  here can be extended
-  finally
-    stmRead.Free;
-    stmWrite.Free;
-  end;
-end;
-
 procedure TifsGSS.FileTraversal(const Folder: string; Callback: TTraversalProc);
 var
   AList: TStringList;
   s: string;
 begin
+//todo: check if the folder has password.
   AList := TStringList.Create;
   try
     FStorage.FileNames(Folder, AList);
@@ -168,30 +199,16 @@ var
   AList: TStringList;
   s: string;
 begin
+//todo: check if the folder has password.
   AList := TStringList.Create;
   try
     FStorage.FolderNames(Folder, AList);
     for s in AList do
       if not IsReservedFolder(s) then    // Do not process reserved files.
-        Callback(s, GetFileAttr(s));
+        Callback(s, GetFileAttr(Folder + '/' + s));
   finally
     AList.Free;
   end;  // try
-end;
-
-procedure TifsGSS.ImportFile(const LocalFile, DataFile: string);
-var
-  stmWrite: TStream;
-  stmRead: TFileStream;
-begin
-  stmRead := TFileStream.Create(LocalFile, fmOpenRead);
-  stmWrite := InternalOpenFile(DataFile, fmCreate);
-  try
-    stmWrite.CopyFrom(stmRead, 0);//todo: 这里可以扩展
-  finally
-    stmRead.Free;
-    stmWrite.Free;
-  end;
 end;
 
 function TifsGSS.IsIFS(const StorageFile: string): Boolean;
