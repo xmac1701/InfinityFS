@@ -24,7 +24,7 @@ implementation
 
 class constructor TifsAESEncryptor.Create;
 begin
-  RegisterEncryptor(TifsAESEncryptor);
+  //RegisterEncryptor(TifsAESEncryptor);
 end;
 
 class function TifsAESEncryptor.Decrypt(Source: TStream; Key: string): TStream;
@@ -48,6 +48,9 @@ class function TifsAESEncryptor.Name: string;
 begin
   Result := 'AES';
 end;
+
+initialization
+  RegisterEncryptor(TifsAESEncryptor);
 
 end.
 

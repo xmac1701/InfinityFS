@@ -137,7 +137,6 @@ type
   public
     constructor Create; virtual;
     destructor Destroy; override;
-    procedure AfterConstruction; override;
     procedure ChangeFilePassword(const OldPassword, NewPassword: string); virtual;
     procedure CloseStorage; virtual;
     procedure CreateFolder(const NewFolderName: string); virtual;
@@ -168,7 +167,7 @@ type
     property OnRequirePassword: TRequirePasswordEvent read FOnRequirePassword write FOnRequirePassword;
   end;
 
-  TifsFileStream = class(TMemoryStream)
+  TifsFileStream = class(TStream)
   private
     FAttr: TifsFileAttr;
     FDecodeCall: IAsyncCall;
@@ -182,9 +181,12 @@ type
     procedure CheckPassword;
     procedure SetPassword(const Value: string); inline;
   protected
+    FModified: Boolean;
+    procedure Accessed;
     procedure Decode(dummy: Integer = 0); virtual;
     procedure Encode(dummy: Integer = 0); virtual;
     procedure Flush; virtual;
+    procedure Modified;
   public
     constructor Create(Owner: TCustomIFS; const FileName: string; const Mode: UInt16 = fmOpenRead);
     destructor Destroy; override;
@@ -262,16 +264,16 @@ end;
 {$ENDREGION}
 
 {$REGION 'TCustomIFS'}
-constructor TCustomIFS.Create;
-begin
-  FVersion := GetVersion;
-  FPathDelim := '/';
-end;
-
 class constructor TCustomIFS.Create;
 begin
   IFS_Reserved_File_Patterns := TList<string>.Create;
   IFS_Reserved_Folder_Patterns := TList<string>.Create;
+end;
+
+constructor TCustomIFS.Create;
+begin
+  FVersion := GetVersion;
+  FPathDelim := '/';
 end;
 
 destructor TCustomIFS.Destroy;
@@ -280,11 +282,6 @@ begin
   FCompressor := nil;
 
   inherited;
-end;
-
-procedure TCustomIFS.AfterConstruction;
-begin
-
 end;
 
 procedure TCustomIFS.ChangeFilePassword(const OldPassword, NewPassword: string);
@@ -319,8 +316,7 @@ begin
   InternalCreateFolder(s);
   with OpenFile(s+'/.ifsFolderAttr', fmCreate) as TifsFileStream do
   begin
-    Attr.IsHidden := True;
-    UpdateAttribute;
+    Attr.IsDirectory := True;
     Free;
   end;
 end;
@@ -357,7 +353,7 @@ var
   src: TStream;
   dst: TFileStream;
 begin
-  src := InternalOpenFile(SrcFile, fmOpenRead);
+  src := OpenFile(SrcFile, fmOpenRead);
   dst := TFileStream.Create(DstFile, fmCreate);
   try
     dst.CopyFrom(src, 0);
@@ -381,7 +377,7 @@ var
   dst: TStream;
 begin
   src := TFileStream.Create(SrcFile, fmOpenRead);
-  dst := InternalOpenFile(DstFile, fmCreate);
+  dst := OpenFile(DstFile, fmCreate);
   try
     dst.CopyFrom(src, 0);
   finally
@@ -483,6 +479,7 @@ begin
     FAttr.Init
   else
     FAttr := FOwner.GetFileAttr(FFileName);
+  FModified := False;
 
   CheckPassword;
   FDecodeCall := AsyncCall(Decode, 0);
@@ -494,6 +491,11 @@ begin
   UpdateAttribute;
 
   inherited;
+end;
+
+procedure TifsFileStream.Accessed;
+begin
+  FAttr.Accessed;
 end;
 
 procedure TifsFileStream.CheckPassword;
@@ -558,17 +560,23 @@ begin
   FEncodeCall.Sync;
 end;
 
+procedure TifsFileStream.Modified;
+begin
+  FAttr.Modified;
+  FModified := True;
+end;
+
 function TifsFileStream.Read(var Buffer; Count: Longint): Longint;
 begin
   repeat until FDecodeCall.Finished;
-  Result := inherited;
-  FAttr.Accessed;
+  Result := FDecodedStream.Read(Buffer, Count);
+  Accessed;
 end;
 
 function TifsFileStream.Seek(Offset: Longint; Origin: Word): Longint;
 begin
   repeat until FDecodeCall.Finished;
-  Result := inherited;
+  Result := FDecodedStream.Seek(Offset, Origin);
 end;
 
 procedure TifsFileStream.SetPassword(const Value: string);
@@ -587,8 +595,8 @@ end;
 function TifsFileStream.Write(const Buffer; Count: Longint): Longint;
 begin
   repeat until FDecodeCall.Finished;
-  Result := inherited;
-  FAttr.Modified;
+  Result := FDecodedStream.Write(Buffer, Count);
+  Modified;
 end;
 {$ENDREGION 'TifsFileStream'}
 

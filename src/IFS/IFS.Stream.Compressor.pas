@@ -34,7 +34,7 @@ implementation
 
 class constructor TifsBZip2Compressor.Create;
 begin
-  RegisterCompressor(TifsBZip2Compressor);
+  //RegisterCompressor(TifsBZip2Compressor);
 end;
 
 class procedure TifsBZip2Compressor.Compress(Source, Target: TStream);
@@ -80,7 +80,7 @@ end;
 
 class constructor TifsZLibCompressor.Create;
 begin
-  RegisterCompressor(TifsZLibCompressor);
+  //RegisterCompressor(TifsZLibCompressor);
 end;
 
 class procedure TifsZLibCompressor.Compress(Source, Target: TStream);
@@ -123,6 +123,8 @@ begin
 end;
 
 initialization
+  RegisterCompressor(TifsBZip2Compressor);
+  RegisterCompressor(TifsZLibCompressor);
 
 end.
 

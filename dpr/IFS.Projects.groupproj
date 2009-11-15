@@ -6,10 +6,10 @@
 			<Projects Include="IFS.dproj">
 				<Dependencies/>
 			</Projects>
-			<Projects Include="IFSExplorer.dproj">
+			<Projects Include="IFSTests.dproj">
 				<Dependencies/>
 			</Projects>
-			<Projects Include="IFSTests.dproj">
+			<Projects Include="IFSExplorer.dproj">
 				<Dependencies/>
 			</Projects>
 		</ItemGroup>
@@ -29,15 +29,6 @@
 		<Target Name="IFS:Make">
 			<MSBuild Targets="Make" Projects="IFS.dproj"/>
 		</Target>
-		<Target Name="IFSExplorer">
-			<MSBuild Projects="IFSExplorer.dproj"/>
-		</Target>
-		<Target Name="IFSExplorer:Clean">
-			<MSBuild Targets="Clean" Projects="IFSExplorer.dproj"/>
-		</Target>
-		<Target Name="IFSExplorer:Make">
-			<MSBuild Targets="Make" Projects="IFSExplorer.dproj"/>
-		</Target>
 		<Target Name="IFSTests">
 			<MSBuild Projects="IFSTests.dproj"/>
 		</Target>
@@ -47,14 +38,23 @@
 		<Target Name="IFSTests:Make">
 			<MSBuild Targets="Make" Projects="IFSTests.dproj"/>
 		</Target>
+		<Target Name="IFSExplorer">
+			<MSBuild Projects="IFSExplorer.dproj"/>
+		</Target>
+		<Target Name="IFSExplorer:Clean">
+			<MSBuild Targets="Clean" Projects="IFSExplorer.dproj"/>
+		</Target>
+		<Target Name="IFSExplorer:Make">
+			<MSBuild Targets="Make" Projects="IFSExplorer.dproj"/>
+		</Target>
 		<Target Name="Build">
-			<CallTarget Targets="IFS;IFSExplorer;IFSTests"/>
+			<CallTarget Targets="IFS;IFSTests;IFSExplorer"/>
 		</Target>
 		<Target Name="Clean">
-			<CallTarget Targets="IFS:Clean;IFSExplorer:Clean;IFSTests:Clean"/>
+			<CallTarget Targets="IFS:Clean;IFSTests:Clean;IFSExplorer:Clean"/>
 		</Target>
 		<Target Name="Make">
-			<CallTarget Targets="IFS:Make;IFSExplorer:Make;IFSTests:Make"/>
+			<CallTarget Targets="IFS:Make;IFSTests:Make;IFSExplorer:Make"/>
 		</Target>
 		<Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 	</Project>
